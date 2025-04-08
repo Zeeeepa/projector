@@ -1,0 +1,148 @@
+https://github.com/Zeeeepa/codegen/tree/main/projector
+![[Project's Implement.png]]
+
+
+
+## Main Dashboard Layout
+
+[](https://github.com/Zeeeepa/codegen/blob/main/projector/enhanced_ui_mockup.md#main-dashboard-layout)
+
+```
++---------------------------------------------------------+
+| [Settings] [Dashboard]                 [Add_Project]+  |
++---------------+-----------------------------------------+
+|               | [Project1]|[Project2][X]|              |
+|               |                         |Tree Structure|
+|               | Project's context       |   View       |
+|  Step by step |   document View         |   Component  |
+|  Structure    |   (Tabbed Interface)    |Integration   |
+| View generated|                         | Completion   |
+|  from user's  |                         |   Check map  |
+|   documents   |Concurrency    project-  | [✓] -done    |
+|               |   [2]        [Settings] | [ ] - to do  |
++---------------+-------------------------+--------------+
+|                                                        |
+|                  Chat Interface                        |
+|                                                        |
++--------------------------------------------------------+
+```
+
+Middle section - tabbed projects  - can be closed down
+2. header - button to add project
+each project's tab Has concurrency input number - how many concurrent feature lifecycle within selected project are processed at once - max 10
+each project has settings dialog - requires input github url optional slack channel id
+allows inputting required documents of any types to project's contents section. 
+each project's tab Has button initialize - documents ingested by llm - it creates high level structural tree from requiremenets and on other side  - step by step list of actions 
+has chat interface which allows convering about specific tabbed project - adjusting it's requirements via nlp 
+multithreaded multi channel connectivity to slack allowing seamless conversation openings in new threads or continue in initialized ones. 
+### 3. Implementation Tree View
+
+[](https://github.com/Zeeeepa/codegen/blob/main/projector/enhanced_ui_mockup.md#3-implementation-tree-view)
+
+```
++----------------------------------------------------------+
+| Tree Structure View Component Integration Completion     |
++----------------------------------------------------------+
+| E-Commerce Platform  [65%]                               |
+| ├── User Authentication [✓]                              |
+| │   ├── Database Schema [✓]                              |
+| │   ├── Basic Auth Endpoints [✓]                         |
+| │   ├── Social Login [✓]                                 |
+| │   ├── Password Reset [✓]                               |
+| │   └── Two-Factor Auth [ ]                              |
+| ├── Product Catalog [75%]                                |
+| │   ├── Database Schema [✓]                              |
+| │   ├── Basic CRUD API [✓]                               |
+| │   ├── Search Functionality [✓]                         |
+| │   ├── Filtering Options [ ]                            |
+| │   └── Sorting Options [ ]                              |
+| ├── Shopping Cart [50%]                                  |
+| │   ├── Database Schema [✓]                              |
+| │   ├── Add/Remove Items [✓]                             |
+| │   ├── Update Quantities [ ]                            |
+| │   ├── Save for Later [ ]                               |
+| │   └── Cart Recovery [ ]                                |
+| └── Checkout Process [0%]                                |
+|     ├── Payment Integration [ ]                          |
+|     ├── Order Confirmation [ ]                           |
+|     ├── Email Notifications [ ]                          |
+|     └── Order History [ ]                                |
++----------------------------------------------------------+
+```
+
+- Hierarchical view of the project structure
+- Checkboxes to indicate completion status
+- Progress bars for each module
+- Color coding for status (green for completed, yellow for in-progress, red for blocked)
+- Expandable/collapsible nodes for easy navigation
+- Drag-and-drop functionality for reordering tasks
+- Right-click context menu for additional actions
+
+###  Implementation Plan Generator
+
+[](https://github.com/Zeeeepa/codegen/blob/main/projector/enhanced_ui_mockup.md#10-implementation-plan-generator)
+
+```
++----------------------------------------------------------+
+| Step by step Structure View generated  from user's Docs  |
++----------------------------------------------------------+
+| Feature: [Two-Factor Authentication                    ] |
+| Description:                                             |
+| [Implement TOTP-based two-factor authentication for    ] |
+| [enhanced security with backup codes and device        ] |
+| [remembering functionality.                            ] |
+|                                                          |
+| Dependencies:                                            |
+| [✓] User Authentication Module                           |
+| [ ] Add New Dependencies...                              |
+|                                                          |
+|                      
+|                                   
+|                                  
++----------------------------------------------------------+
+| Generated Plan:                                          |
+|                                                          |
+| 1. Update User Schema                                    |
+| [ ]- Add TOTP secret field                               |
+| [ ]   - Add backup codes field                              |
+| [ ]- Add 2FA enabled flag                                |
+|                                                          |
+| 2.     Implement TOTP Generation                             |
+| [✓] - Add pyotp library                                   |
+| [✓]  - Create secret generation function                   |
+| [ ] - Implement QR code generation                        |
+|                                                          |
+| 3. Create API Endpoints                                  |
+|    - Enable/disable 2FA endpoint                         |
+|    - Verify TOTP code endpoint                           |
+|    - Generate backup codes endpoint                      |
+|                                                          |
+| 4. Update Login Flow                                     |
+|    - Modify authentication process                       |
+|    - Add 2FA verification step                           |
+|    - Implement remember device functionality             |
+|                                                          |
+| 5. Create Frontend Components                            |
+|    - 2FA setup page                                      |
+|    - TOTP verification modal                             |
+|    - Backup codes display                                |
+|                                                          |
+| 6. Testing and Documentation                             |
+|    - Unit tests for all components                       |
+|    - Integration tests for the flow                      |
+|    - User documentation                                  |
++----------------------------------------------------------+
+|                           |
+|                           |
++----------------------------------------------------------+
+| [Generate Code Stubs] [Add to Project] [Export Plan]     |
++----------------------------------------------------------+
+```
+
+- AI-powered implementation plan generation
+- Task breakdown and estimation
+- Dependency management
+- Resource allocation
+- Timeline visualization
+- Code stub generation
+- Integration with project structure
