@@ -5,10 +5,10 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from datetime import datetime
 
-from projector.backend.project_database import ProjectDatabase
-from projector.backend.project import Project
-from projector.api.models.project import ProjectCreate, ProjectUpdate, Project as ProjectModel
-from projector.api.main import get_project_database, get_project_manager, get_ai_user_agent
+from backend.project_database import ProjectDatabase
+from backend.project import Project
+from api.models.project import ProjectCreate, ProjectUpdate, Project as ProjectModel
+from api.main import get_project_database, get_project_manager, get_ai_user_agent
 
 router = APIRouter()
 
@@ -236,34 +236,3 @@ async def update_task_status(
         raise HTTPException(status_code=500, detail="Failed to update task status")
     
     return {"message": f"Task {task_id} status updated to {status}"}
-
-@router.get("/{project_id}/recent-activity")
-async def get_recent_activity(
-    project_id: str,
-    days: int = 7,
-    project_database: ProjectDatabase = Depends(get_project_database),
-    github_manager = Depends(get_github_manager)
-):
-    """Get recent activity for a project."""
-    project = project_database.get_project(project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Get repository owner and name
-    repo_url = project.git_url
-    repo_parts = repo_url.rstrip('/').split('/')
-    repo_name = repo_parts[-1].replace('.git', '')
-    repo_owner = repo_parts[-2]
-    
-    # Get recent merges
-    merges = github_manager.get_recent_merges(
-        owner=repo_owner,
-        repo=repo_name,
-        days=days
-    )
-    
-    return {
-        "project_id": project_id,
-        "project_name": project.name,
-        "recent_merges": merges
-    }

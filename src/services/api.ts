@@ -62,7 +62,21 @@ export class ApiService {
       headers: this.getHeaders(),
     });
 
-    return this.handleResponse<Project[]>(response);
+    const data = await this.handleResponse<any[]>(response);
+    
+    // Transform the backend response to match frontend Project type
+    return data.map(item => ({
+      id: item.id,
+      name: item.name,
+      description: '',
+      githubUrl: item.git_url,
+      slackChannel: item.slack_channel || '',
+      threads: item.max_parallel_tasks,
+      created_at: item.created_at,
+      initialized: item.implementation_plan !== null,
+      progress: 0, // Calculate progress based on tasks if needed
+      documentation: item.documents || [],
+    }));
   }
 
   /**
@@ -74,7 +88,21 @@ export class ApiService {
       headers: this.getHeaders(),
     });
 
-    return this.handleResponse<Project>(response);
+    const data = await this.handleResponse<any>(response);
+    
+    // Transform the backend response to match frontend Project type
+    return {
+      id: data.id,
+      name: data.name,
+      description: '',
+      githubUrl: data.git_url,
+      slackChannel: data.slack_channel || '',
+      threads: data.max_parallel_tasks,
+      created_at: data.created_at,
+      initialized: data.implementation_plan !== null,
+      progress: 0, // Calculate progress based on tasks if needed
+      documentation: data.documents || [],
+    };
   }
 
   /**
@@ -100,10 +128,10 @@ export class ApiService {
       name: data.name,
       description: '',
       githubUrl: data.git_url,
-      slackChannel: data.slack_channel,
+      slackChannel: data.slack_channel || '',
       threads: data.max_parallel_tasks,
       created_at: data.created_at,
-      initialized: false,
+      initialized: data.implementation_plan !== null,
       progress: 0,
       documentation: data.documents || [],
     };
@@ -136,10 +164,10 @@ export class ApiService {
       name: data.name,
       description: '',
       githubUrl: data.git_url,
-      slackChannel: data.slack_channel,
+      slackChannel: data.slack_channel || '',
       threads: data.max_parallel_tasks,
       created_at: data.created_at,
-      initialized: updates.initialized !== undefined ? updates.initialized : false,
+      initialized: data.implementation_plan !== null,
       progress: updates.progress !== undefined ? updates.progress : 0,
       documentation: data.documents || [],
     };
