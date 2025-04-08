@@ -1,85 +1,78 @@
-import React from 'react';
-import { ChevronRight, ChevronDown, CheckCircle2, Circle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { useProjectStore } from '../store';
+import { apiService } from '../services/api';
 
 export function ProjectList() {
-  const { projects, activeProject, setActiveProject } = useProjectStore();
-  const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(new Set());
+  const { projects, setActiveProject, activeProject, apiSettings } = useProjectStore();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const toggleNode = (nodeId: string) => {
-    const newExpanded = new Set(expandedNodes);
-    if (newExpanded.has(nodeId)) {
-      newExpanded.delete(nodeId);
-    } else {
-      newExpanded.add(nodeId);
-    }
-    setExpandedNodes(newExpanded);
-  };
+  useEffect(() => {
+    const fetchProjects = async () => {
+      if (!apiSettings.apiBaseUrl) return;
 
-  const renderProject = (project: any) => {
-    const isExpanded = expandedNodes.has(project.id);
-    const isActive = activeProject?.id === project.id;
+      setIsLoading(true);
+      setError(null);
 
-    return (
-      <div key={project.id} className="space-y-1">
-        <div 
-          className={`flex items-center space-x-2 py-1 px-2 hover:bg-gray-700 rounded cursor-pointer ${
-            isActive ? 'bg-gray-700' : ''
-          }`}
-          onClick={() => setActiveProject(project)}
-        >
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleNode(project.id);
-            }}
-            className="text-gray-400 hover:text-gray-300"
-          >
-            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-          {project.initialized ? (
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-          ) : (
-            <Circle className="h-4 w-4 text-gray-500" />
-          )}
-          <span className="text-sm text-gray-300">{project.name}</span>
-          <div className="flex-1 flex items-center">
-            <div className="w-full bg-gray-700 rounded-full h-1.5">
-              <div
-                className="bg-indigo-500 h-1.5 rounded-full"
-                style={{ width: `${project.progress}%` }}
-              />
-            </div>
-            <span className="ml-2 text-xs text-gray-400">{project.progress}%</span>
-          </div>
-        </div>
-        {isExpanded && (
-          <div className="pl-6 space-y-1">
-            <div className="text-xs text-gray-400">GitHub: {project.githubUrl}</div>
-            <div className="text-xs text-gray-400">Slack: {project.slackChannel}</div>
-            <div className="text-xs text-gray-400">Threads: {project.threads}</div>
-            {project.documentation.length > 0 && (
-              <div className="mt-2">
-                <div className="text-xs font-medium text-gray-400">Documents:</div>
-                {project.documentation.map((doc: string, index: number) => (
-                  <div key={index} className="text-xs text-gray-400 pl-2">• {doc}</div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
+      try {
+        apiService.updateSettings(apiSettings);
+        const fetchedProjects = await apiService.getProjects();
+        // TODO: Update the store with fetched projects
+      } catch (err) {
+        console.error('Error fetching projects:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch projects');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProjects();
+  }, [apiSettings.apiBaseUrl, apiSettings.apiKey]);
 
   return (
-    <div className="p-4 space-y-2">
+    <div className="p-4">
+      {isLoading && (
+        <div className="text-center text-gray-400 py-4">
+          Loading projects...
+        </div>
+      )}
+
+      {error && (
+        <div className="p-2 bg-red-900 text-red-100 rounded text-sm mb-4">
+          {error}
+        </div>
+      )}
+
       {projects.length === 0 ? (
-        <div className="text-center text-gray-400 text-sm">
-          No projects yet. Click "Add Project" to create one.
+        <div className="text-center text-gray-400 py-4">
+          No projects yet. Create a new project to get started.
         </div>
       ) : (
-        projects.map(renderProject)
+        <ul className="space-y-2">
+          {projects.map((project) => (
+            <li key={project.id}>
+              <button
+                onClick={() => setActiveProject(project)}
+                className={`w-full text-left px-3 py-2 rounded-md ${
+                  activeProject?.id === project.id
+                    ? 'bg-indigo-700 text-white'
+                    : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                }`}
+              >
+                <div className="font-medium">{project.name}</div>
+                <div className="text-xs text-gray-400 truncate">{project.githubUrl}</div>
+                {project.initialized && (
+                  <div className="mt-1 w-full bg-gray-600 rounded-full h-1.5">
+                    <div
+                      className="bg-indigo-500 h-1.5 rounded-full"
+                      style={{ width: `${project.progress}%` }}
+                    ></div>
+                  </div>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

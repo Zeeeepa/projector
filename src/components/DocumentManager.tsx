@@ -1,60 +1,130 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useProjectStore } from '../store';
+import { apiService } from '../services/api';
 import { Trash2 } from 'lucide-react';
 
 export function DocumentManager() {
-  const { activeProject, addDocument, removeDocument } = useProjectStore();
-  const [newDocument, setNewDocument] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const { activeProject, addDocument, removeDocument, apiSettings } = useProjectStore();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeProject || !newDocument.trim()) return;
-    
-    addDocument(activeProject.id, newDocument);
-    setNewDocument('');
-  };
-
-  const handleRemove = (document: string) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!activeProject) return;
-    removeDocument(activeProject.id, document);
+    
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setIsUploading(true);
+    setError(null);
+    
+    try {
+      // Update API settings if they've changed
+      apiService.updateSettings(apiSettings);
+      
+      // Upload each file
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // Determine document category based on file name or extension
+        let category = 'requirements';
+        if (file.name.includes('architecture') || file.name.endsWith('.arch.md')) {
+          category = 'architecture';
+        } else if (file.name.includes('implementation') || file.name.endsWith('.impl.md')) {
+          category = 'implementation';
+        }
+        
+        // Upload the document
+        const message = await apiService.uploadDocument(activeProject.id, file, category);
+        
+        // Add document to the project in the store
+        addDocument(activeProject.id, file.name);
+      }
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (err) {
+      console.error('Error uploading document:', err);
+      setError(err instanceof Error ? err.message : 'Failed to upload document');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
-  if (!activeProject) return null;
+  const handleRemoveDocument = async (document: string) => {
+    if (!activeProject) return;
+    
+    try {
+      // In a real implementation, you would call an API to remove the document
+      // For now, we'll just update the local state
+      removeDocument(activeProject.id, document);
+    } catch (err) {
+      console.error('Error removing document:', err);
+      setError(err instanceof Error ? err.message : 'Failed to remove document');
+    }
+  };
+
+  if (!activeProject) {
+    return <div className="text-gray-400">No active project</div>;
+  }
 
   return (
     <div className="space-y-4">
-      <form onSubmit={handleSubmit} className="flex space-x-2">
+      {error && (
+        <div className="p-2 bg-red-900 text-red-100 rounded text-sm">
+          {error}
+        </div>
+      )}
+      
+      <div className="flex items-center space-x-2">
         <input
-          type="text"
-          value={newDocument}
-          onChange={(e) => setNewDocument(e.target.value)}
-          placeholder="Add markdown document URL or content..."
-          className="flex-1 rounded-md bg-gray-700 border-gray-600 text-gray-100 px-3 py-2 text-sm"
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          className="hidden"
+          accept=".md,.txt,.pdf"
+          multiple
+          disabled={isUploading}
         />
         <button
-          type="submit"
-          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+          onClick={() => fileInputRef.current?.click()}
+          className={`px-3 py-1 text-sm font-medium rounded-md shadow-sm text-white ${
+            isUploading ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+          }`}
+          disabled={isUploading}
         >
-          Add
+          {isUploading ? 'Uploading...' : 'Upload Document'}
         </button>
-      </form>
-
-      <div className="space-y-2">
-        {activeProject.documentation.map((doc, index) => (
-          <div
-            key={index}
-            className="flex items-center justify-between p-2 bg-gray-700 rounded-md"
-          >
-            <span className="text-sm text-gray-200 truncate flex-1">{doc}</span>
-            <button
-              onClick={() => handleRemove(doc)}
-              className="ml-2 text-gray-400 hover:text-red-400"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        ))}
+        <span className="text-xs text-gray-400">
+          Supports .md, .txt, .pdf
+        </span>
       </div>
+      
+      {activeProject.documentation.length > 0 ? (
+        <ul className="space-y-2">
+          {activeProject.documentation.map((doc) => (
+            <li key={doc} className="flex items-center justify-between bg-gray-700 rounded-md p-2">
+              <span className="text-sm text-gray-200 truncate">{doc}</span>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => handleRemoveDocument(doc)}
+                  className="text-xs text-red-400 hover:text-red-300"
+                  disabled={isUploading}
+                >
+                  Remove
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="text-sm text-gray-400">
+          No documents uploaded yet. Upload documents to help the AI understand your project.
+        </div>
+      )}
     </div>
   );
 }
