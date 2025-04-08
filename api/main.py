@@ -9,37 +9,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 # Add the project root to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-
-# Add the src directory to the Python path for codegen modules
-src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src'))
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 # Load environment variables
 load_dotenv()
 
 # Import backend components
-from projector.backend.config import (
+from backend.config import (
     SLACK_USER_TOKEN, GITHUB_TOKEN, GITHUB_USERNAME,
     SLACK_DEFAULT_CHANNEL, GITHUB_DEFAULT_REPO
 )
-from projector.backend.slack_manager import SlackManager
-from projector.backend.github_manager import GitHubManager
-from projector.backend.project_database import ProjectDatabase
-from projector.backend.project_manager import ProjectManager
-from projector.backend.thread_pool import ThreadPool
-from projector.backend.ai_user_agent import AIUserAgent
+from backend.slack_manager import SlackManager
+from backend.github_manager import GitHubManager
+from backend.project_database import ProjectDatabase
+from backend.project_manager import ProjectManager
+from backend.thread_pool import ThreadPool
+from backend.ai_user_agent import AIUserAgent
 
 # Import API routes
-from projector.api.routes import projects, github, slack, chat, code_improvement
+from api.routes import projects, github, slack, chat
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("projector/api.log"),
+        logging.FileHandler("api.log"),
         logging.StreamHandler()
     ]
 )
@@ -117,7 +112,6 @@ app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(github.router, prefix="/api/github", tags=["github"])
 app.include_router(slack.router, prefix="/api/slack", tags=["slack"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
-app.include_router(code_improvement.router, prefix="/api/code-improvement", tags=["code-improvement"])
 
 @app.get("/api/health")
 async def health_check():
