@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useProjectStore } from '../store';
-import { AIProvider } from '../types';
+import { AIProvider, AIConfig } from '../types';
+import { apiService } from '../services/api';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -8,43 +9,118 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
-  const { apiSettings, updateAPISettings } = useProjectStore();
+  const { 
+    apiSettings, 
+    updateAPISettings, 
+    aiConfigs, 
+    addAIConfig, 
+    updateAIConfig, 
+    deleteAIConfig, 
+    activeAIConfigId, 
+    setActiveAIConfig 
+  } = useProjectStore();
   
-  const [apiKey, setApiKey] = useState(apiSettings.apiKey);
   const [apiBaseUrl, setApiBaseUrl] = useState(apiSettings.apiBaseUrl);
-  const [model, setModel] = useState(apiSettings.model);
   const [githubToken, setGithubToken] = useState(apiSettings.githubToken);
-  const [aiProvider, setAiProvider] = useState<AIProvider>(apiSettings.aiProvider);
+  
+  const [configName, setConfigName] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [model, setModel] = useState('');
+  const [aiProvider, setAiProvider] = useState<AIProvider>('Open_AI');
+  const [customEndpoint, setCustomEndpoint] = useState('');
+  const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
+  
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [customEndpoint, setCustomEndpoint] = useState(apiSettings.customEndpoint || '');
   const [testMessage, setTestMessage] = useState('Hello, can you hear me?');
   const [activeTab, setActiveTab] = useState<'ai' | 'github'>('ai');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
 
   useEffect(() => {
-    setApiKey(apiSettings.apiKey);
-    setApiBaseUrl(apiSettings.apiBaseUrl);
-    setModel(apiSettings.model);
-    setGithubToken(apiSettings.githubToken);
-    setAiProvider(apiSettings.aiProvider);
-    setCustomEndpoint(apiSettings.customEndpoint || '');
-  }, [apiSettings]);
+    if (activeAIConfigId) {
+      const activeConfig = aiConfigs.find(config => config.id === activeAIConfigId);
+      if (activeConfig) {
+        setEditingConfigId(activeConfig.id);
+        setConfigName(activeConfig.name);
+        setApiKey(activeConfig.apiKey);
+        setModel(activeConfig.model);
+        setAiProvider(activeConfig.aiProvider);
+        setCustomEndpoint(activeConfig.customEndpoint || '');
+      }
+    } else {
+      resetConfigForm();
+    }
+  }, [activeAIConfigId, aiConfigs]);
+
+  const resetConfigForm = () => {
+    setEditingConfigId(null);
+    setConfigName('');
+    setApiKey('');
+    setModel('');
+    setAiProvider('Open_AI');
+    setCustomEndpoint('');
+    setTestResult(null);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     updateAPISettings({
-      apiKey,
       apiBaseUrl,
-      model,
-      githubToken,
-      aiProvider,
-      customEndpoint
+      githubToken
     });
     
     onClose();
+  };
+
+  const handleSaveConfig = () => {
+    if (!configName || !apiKey) {
+      alert('Configuration name and API key are required');
+      return;
+    }
+    
+    const configData = {
+      name: configName,
+      apiKey,
+      model,
+      aiProvider,
+      customEndpoint: customEndpoint || undefined,
+      isVerified: testResult?.success || false
+    };
+    
+    if (editingConfigId) {
+      updateAIConfig(editingConfigId, configData);
+    } else {
+      addAIConfig(configData);
+    }
+    
+    resetConfigForm();
+  };
+
+  const handleDeleteConfig = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this configuration?')) {
+      deleteAIConfig(id);
+    }
+  };
+
+  const handleEditConfig = (config: AIConfig) => {
+    setEditingConfigId(config.id);
+    setConfigName(config.name);
+    setApiKey(config.apiKey);
+    setModel(config.model);
+    setAiProvider(config.aiProvider);
+    setCustomEndpoint(config.customEndpoint || '');
+    setTestResult(config.isVerified ? { success: true, message: 'Configuration verified' } : null);
+  };
+
+  const handleSetActiveConfig = (id: string) => {
+    setActiveAIConfig(id);
+    
+    const config = aiConfigs.find(c => c.id === id);
+    if (config) {
+      apiService.setActiveConfig(config);
+    }
   };
 
   const fetchModels = async () => {
@@ -129,130 +205,18 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setTestResult(null);
     
     try {
-      let endpoint = apiBaseUrl;
-      let testUrl = '';
-      let headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      };
+      const result = await apiService.testAIConfig({
+        apiKey,
+        model,
+        aiProvider,
+        customEndpoint,
+        name: configName
+      }, testMessage);
       
-      if (apiKey) {
-        headers['Authorization'] = `Bearer ${apiKey}`;
-      }
+      setTestResult(result);
       
-      if (aiProvider === 'Open_AI' || aiProvider === 'Open_AI_Compatible') {
-        testUrl = aiProvider === 'Open_AI' 
-          ? 'https://api.openai.com/v1/chat/completions'
-          : customEndpoint;
-          
-        const testBody = {
-          model: model || 'gpt-3.5-turbo',
-          messages: [{ role: 'user', content: testMessage }],
-          max_tokens: 50,
-          temperature: 0.7
-        };
-        
-        const response = await fetch(testUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(testBody)
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const aiResponse = data.choices?.[0]?.message?.content || '';
-          
-          setTestResult({
-            success: true,
-            message: `Connection successful! Response: "${aiResponse.substring(0, 100)}${aiResponse.length > 100 ? '...' : ''}"`
-          });
-          
-          updateAPISettings({
-            apiKey,
-            apiBaseUrl,
-            model,
-            githubToken,
-            aiProvider,
-            customEndpoint
-          });
-        } else {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || `API error: ${response.status}`);
-        }
-      } else if (aiProvider === 'Anthropic') {
-        testUrl = 'https://api.anthropic.com/v1/messages';
-        headers['anthropic-version'] = '2023-06-01';
-        
-        const testBody = {
-          model: model || 'claude-3-haiku-20240307',
-          messages: [{ role: 'user', content: testMessage }],
-          max_tokens: 50
-        };
-        
-        const response = await fetch(testUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(testBody)
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const aiResponse = data.content?.[0]?.text || '';
-          
-          setTestResult({
-            success: true,
-            message: `Connection successful! Response: "${aiResponse.substring(0, 100)}${aiResponse.length > 100 ? '...' : ''}"`
-          });
-          
-          updateAPISettings({
-            apiKey,
-            apiBaseUrl,
-            model,
-            githubToken,
-            aiProvider,
-            customEndpoint
-          });
-        } else {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || `API error: ${response.status}`);
-        }
-      } else if (aiProvider === 'Nvidia') {
-        testUrl = 'https://api.nvidia.com/v1/chat/completions';
-        
-        const testBody = {
-          model: model || 'llama-3-70b',
-          messages: [{ role: 'user', content: testMessage }],
-          max_tokens: 50
-        };
-        
-        const response = await fetch(testUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(testBody)
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const aiResponse = data.choices?.[0]?.message?.content || '';
-          
-          setTestResult({
-            success: true,
-            message: `Connection successful! Response: "${aiResponse.substring(0, 100)}${aiResponse.length > 100 ? '...' : ''}"`
-          });
-          
-          updateAPISettings({
-            apiKey,
-            apiBaseUrl,
-            model,
-            githubToken,
-            aiProvider,
-            customEndpoint
-          });
-        } else {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || `API error: ${response.status}`);
-        }
-      } else {
-        throw new Error('Unsupported AI provider');
+      if (editingConfigId && result.success) {
+        updateAIConfig(editingConfigId, { isVerified: true });
       }
     } catch (err) {
       console.error('Error testing connection:', err);
@@ -269,7 +233,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-md p-6 border border-gray-700">
+      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl p-6 border border-gray-700 max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-semibold text-gray-100 mb-4">Settings</h2>
         
         <div className="mb-4 flex border-b border-gray-700">
@@ -291,179 +255,291 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
           <div className="space-y-4">
             {activeTab === 'ai' && (
               <>
-                <div>
-                  <label htmlFor="aiProvider" className="block text-sm font-medium text-gray-300">
-                    AI Provider
-                  </label>
-                  <select
-                    id="aiProvider"
-                    value={aiProvider}
-                    onChange={(e) => {
-                      setAiProvider(e.target.value as AIProvider);
-                      if (e.target.value === 'Open_AI') {
-                        setModel('gpt-3.5-turbo');
-                      } else if (e.target.value === 'Anthropic') {
-                        setModel('claude-3-haiku-20240307');
-                      } else if (e.target.value === 'Nvidia') {
-                        setModel('llama-3-70b');
-                      } else {
-                        setModel('');
-                      }
-                    }}
-                    className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  >
-                    <option value="Open_AI">OpenAI</option>
-                    <option value="Anthropic">Anthropic</option>
-                    <option value="Open_AI_Compatible">OpenAI Compatible</option>
-                    <option value="Nvidia">Nvidia</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300">
-                    API Key
-                  </label>
-                  <input
-                    type="password"
-                    id="apiKey"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="Enter your API key"
-                  />
-                </div>
-                
-                {aiProvider === 'Open_AI_Compatible' && (
-                  <div>
-                    <label htmlFor="customEndpoint" className="block text-sm font-medium text-gray-300">
-                      Custom API Endpoint
-                    </label>
-                    <input
-                      type="url"
-                      id="customEndpoint"
-                      value={customEndpoint}
-                      onChange={(e) => setCustomEndpoint(e.target.value)}
-                      className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                      placeholder="https://your-api-endpoint.com/v1/chat/completions"
-                    />
-                    <p className="mt-1 text-xs text-gray-400">
-                      Full URL to the chat completions endpoint (e.g., https://api.example.com/v1/chat/completions)
-                    </p>
-                  </div>
-                )}
-                
-                <div>
-                  <label htmlFor="model" className="block text-sm font-medium text-gray-300 flex justify-between">
-                    <span>AI Model</span>
-                    {isLoadingModels && <span className="text-blue-400 text-xs">Loading models...</span>}
-                  </label>
-                  <select
-                    id="model"
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  >
-                    {availableModels.length > 0 ? (
-                      availableModels.map((modelName) => (
-                        <option key={modelName} value={modelName}>
-                          {modelName}
-                        </option>
-                      ))
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium text-gray-200">Saved Configurations</h3>
+                    
+                    {aiConfigs.length === 0 ? (
+                      <div className="text-gray-400 text-sm p-4 border border-gray-700 rounded-md">
+                        No AI configurations saved yet. Create one using the form.
+                      </div>
                     ) : (
-                      <>
-                        {aiProvider === 'Open_AI' && (
-                          <>
-                            <option value="gpt-4">GPT-4</option>
-                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                          </>
-                        )}
-                        {aiProvider === 'Anthropic' && (
-                          <>
-                            <option value="claude-3-opus-20240229">Claude 3 Opus</option>
-                            <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
-                            <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
-                          </>
-                        )}
-                        {aiProvider === 'Nvidia' && (
-                          <>
-                            <option value="llama-3-70b">Llama 3 70B</option>
-                            <option value="mixtral-8x7b">Mixtral 8x7B</option>
-                          </>
-                        )}
-                        {aiProvider === 'Open_AI_Compatible' && (
-                          <>
-                            <option value="llama-3-8b">Llama 3 8B</option>
-                            <option value="llama-3-70b">Llama 3 70B</option>
-                            <option value="mistral-7b">Mistral 7B</option>
-                            <option value="mixtral-8x7b">Mixtral 8x7B</option>
-                          </>
-                        )}
-                      </>
+                      <div className="space-y-3">
+                        {aiConfigs.map((config) => (
+                          <div 
+                            key={config.id} 
+                            className={`p-3 border rounded-md flex justify-between items-center ${
+                              activeAIConfigId === config.id 
+                                ? 'bg-blue-900 border-blue-700' 
+                                : 'bg-gray-800 border-gray-700'
+                            }`}
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center">
+                                <span className="font-medium text-gray-200">{config.name}</span>
+                                {config.isVerified && (
+                                  <span className="ml-2 text-green-400 text-xs bg-green-900 px-2 py-0.5 rounded-full">
+                                    Verified
+                                  </span>
+                                )}
+                                {activeAIConfigId === config.id && (
+                                  <span className="ml-2 text-blue-400 text-xs bg-blue-900 px-2 py-0.5 rounded-full">
+                                    Active
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-1">
+                                {config.aiProvider} • {config.model}
+                              </div>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                type="button"
+                                onClick={() => handleSetActiveConfig(config.id)}
+                                className={`text-xs px-2 py-1 rounded ${
+                                  activeAIConfigId === config.id
+                                    ? 'bg-blue-700 text-blue-100 cursor-default'
+                                    : 'bg-blue-600 text-blue-100 hover:bg-blue-500'
+                                }`}
+                                disabled={activeAIConfigId === config.id}
+                              >
+                                {activeAIConfigId === config.id ? 'Active' : 'Use'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleEditConfig(config)}
+                                className="text-xs px-2 py-1 bg-gray-600 text-gray-100 rounded hover:bg-gray-500"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteConfig(config.id)}
+                                className="text-xs px-2 py-1 bg-red-600 text-red-100 rounded hover:bg-red-500"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  </select>
-                  {availableModels.length === 0 && !isLoadingModels && apiKey && (
-                    <button
-                      type="button"
-                      onClick={fetchModels}
-                      className="mt-1 text-xs text-blue-400 hover:text-blue-300"
-                    >
-                      Fetch available models
-                    </button>
-                  )}
-                </div>
-                
-                <div>
-                  <label htmlFor="apiBaseUrl" className="block text-sm font-medium text-gray-300">
-                    Backend API URL
-                  </label>
-                  <input
-                    type="url"
-                    id="apiBaseUrl"
-                    value={apiBaseUrl}
-                    onChange={(e) => setApiBaseUrl(e.target.value)}
-                    className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="http://localhost:8000"
-                  />
-                  <p className="mt-1 text-xs text-gray-400">
-                    URL for the Projector backend API
-                  </p>
-                </div>
-                
-                <div>
-                  <label htmlFor="testMessage" className="block text-sm font-medium text-gray-300">
-                    Test Message
-                  </label>
-                  <input
-                    type="text"
-                    id="testMessage"
-                    value={testMessage}
-                    onChange={(e) => setTestMessage(e.target.value)}
-                    className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="Enter a test message for the API"
-                  />
-                  <p className="mt-1 text-xs text-gray-400">
-                    This message will be sent to test the API connection
-                  </p>
-                </div>
-                
-                {testResult && (
-                  <div className={`p-3 rounded-md ${testResult.success ? 'bg-green-900 text-green-100' : 'bg-red-900 text-red-100'}`}>
-                    {testResult.message}
+                    
+                    <div>
+                      <label htmlFor="apiBaseUrl" className="block text-sm font-medium text-gray-300">
+                        Backend API URL
+                      </label>
+                      <input
+                        type="url"
+                        id="apiBaseUrl"
+                        value={apiBaseUrl}
+                        onChange={(e) => setApiBaseUrl(e.target.value)}
+                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        placeholder="http://localhost:8000"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">
+                        URL for the Projector backend API
+                      </p>
+                    </div>
                   </div>
-                )}
-                
-                <div>
-                  <button
-                    type="button"
-                    onClick={testConnection}
-                    className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white w-full ${
-                      isTesting ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                    }`}
-                    disabled={isTesting || (!apiKey) || (aiProvider === 'Open_AI_Compatible' && !customEndpoint)}
-                  >
-                    {isTesting ? 'Testing...' : 'Test Connection'}
-                  </button>
+                  
+                  <div className="space-y-4 border-l border-gray-700 pl-6">
+                    <h3 className="text-lg font-medium text-gray-200">
+                      {editingConfigId ? 'Edit Configuration' : 'New Configuration'}
+                    </h3>
+                    
+                    <div>
+                      <label htmlFor="configName" className="block text-sm font-medium text-gray-300">
+                        Configuration Name
+                      </label>
+                      <input
+                        type="text"
+                        id="configName"
+                        value={configName}
+                        onChange={(e) => setConfigName(e.target.value)}
+                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        placeholder="My OpenAI Config"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="aiProvider" className="block text-sm font-medium text-gray-300">
+                        AI Provider
+                      </label>
+                      <select
+                        id="aiProvider"
+                        value={aiProvider}
+                        onChange={(e) => {
+                          setAiProvider(e.target.value as AIProvider);
+                          if (e.target.value === 'Open_AI') {
+                            setModel('gpt-3.5-turbo');
+                          } else if (e.target.value === 'Anthropic') {
+                            setModel('claude-3-haiku-20240307');
+                          } else if (e.target.value === 'Nvidia') {
+                            setModel('llama-3-70b');
+                          } else {
+                            setModel('');
+                          }
+                        }}
+                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      >
+                        <option value="Open_AI">OpenAI</option>
+                        <option value="Anthropic">Anthropic</option>
+                        <option value="Open_AI_Compatible">OpenAI Compatible</option>
+                        <option value="Nvidia">Nvidia</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300">
+                        API Key
+                      </label>
+                      <input
+                        type="password"
+                        id="apiKey"
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        placeholder="Enter your API key"
+                      />
+                    </div>
+                    
+                    {aiProvider === 'Open_AI_Compatible' && (
+                      <div>
+                        <label htmlFor="customEndpoint" className="block text-sm font-medium text-gray-300">
+                          Custom API Endpoint
+                        </label>
+                        <input
+                          type="url"
+                          id="customEndpoint"
+                          value={customEndpoint}
+                          onChange={(e) => setCustomEndpoint(e.target.value)}
+                          className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                          placeholder="https://your-api-endpoint.com/v1/chat/completions"
+                        />
+                        <p className="mt-1 text-xs text-gray-400">
+                          Full URL to the chat completions endpoint (e.g., https://api.example.com/v1/chat/completions)
+                        </p>
+                      </div>
+                    )}
+                    
+                    <div>
+                      <label htmlFor="model" className="block text-sm font-medium text-gray-300 flex justify-between">
+                        <span>AI Model</span>
+                        {isLoadingModels && <span className="text-blue-400 text-xs">Loading models...</span>}
+                      </label>
+                      <select
+                        id="model"
+                        value={model}
+                        onChange={(e) => setModel(e.target.value)}
+                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      >
+                        <option value="">Select a model</option>
+                        {availableModels.length > 0 ? (
+                          availableModels.map((modelName) => (
+                            <option key={modelName} value={modelName}>
+                              {modelName}
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            {aiProvider === 'Open_AI' && (
+                              <>
+                                <option value="gpt-4">GPT-4</option>
+                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                              </>
+                            )}
+                            {aiProvider === 'Anthropic' && (
+                              <>
+                                <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                                <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                                <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                              </>
+                            )}
+                            {aiProvider === 'Nvidia' && (
+                              <>
+                                <option value="llama-3-70b">Llama 3 70B</option>
+                                <option value="mixtral-8x7b">Mixtral 8x7B</option>
+                              </>
+                            )}
+                            {aiProvider === 'Open_AI_Compatible' && (
+                              <>
+                                <option value="llama-3-8b">Llama 3 8B</option>
+                                <option value="llama-3-70b">Llama 3 70B</option>
+                                <option value="mistral-7b">Mistral 7B</option>
+                                <option value="mixtral-8x7b">Mixtral 8x7B</option>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </select>
+                      {availableModels.length === 0 && !isLoadingModels && apiKey && (
+                        <button
+                          type="button"
+                          onClick={fetchModels}
+                          className="mt-1 text-xs text-blue-400 hover:text-blue-300"
+                        >
+                          Fetch available models
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="testMessage" className="block text-sm font-medium text-gray-300">
+                        Test Message
+                      </label>
+                      <input
+                        type="text"
+                        id="testMessage"
+                        value={testMessage}
+                        onChange={(e) => setTestMessage(e.target.value)}
+                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        placeholder="Enter a test message for the API"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">
+                        This message will be sent to test the API connection
+                      </p>
+                    </div>
+                    
+                    {testResult && (
+                      <div className={`p-3 rounded-md ${testResult.success ? 'bg-green-900 text-green-100' : 'bg-red-900 text-red-100'}`}>
+                        {testResult.message}
+                      </div>
+                    )}
+                    
+                    <div className="flex space-x-3">
+                      <button
+                        type="button"
+                        onClick={testConnection}
+                        className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white flex-1 ${
+                          isTesting ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                        disabled={isTesting || (!apiKey) || (aiProvider === 'Open_AI_Compatible' && !customEndpoint)}
+                      >
+                        {isTesting ? 'Testing...' : 'Test Connection'}
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={handleSaveConfig}
+                        className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 flex-1"
+                        disabled={!configName || !apiKey || !model}
+                      >
+                        {editingConfigId ? 'Update Configuration' : 'Save Configuration'}
+                      </button>
+                    </div>
+                    
+                    {editingConfigId && (
+                      <button
+                        type="button"
+                        onClick={resetConfigForm}
+                        className="w-full px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
+                      >
+                        Cancel Editing
+                      </button>
+                    )}
+                  </div>
                 </div>
               </>
             )}

@@ -19,15 +19,31 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+export interface AIConfig {
+  id: string;
+  name: string;
+  apiKey: string;
+  model: string;
+  aiProvider: AIProvider;
+  customEndpoint?: string;
+  isVerified?: boolean;
+}
+
 export interface ProjectStore {
   projects: Project[];
   activeProject: Project | null;
   apiSettings: APISettings;
+  aiConfigs: AIConfig[];
+  activeAIConfigId: string | null;
   addProject: (project: Omit<Project, 'id' | 'created_at' | 'initialized' | 'progress' | 'documentation'>) => void;
   setActiveProject: (project: Project) => void;
   updateProject: (id: string, updates: Partial<Project>) => void;
   initializeProject: (id: string) => void;
   updateAPISettings: (settings: Partial<APISettings>) => void;
+  addAIConfig: (config: Omit<AIConfig, 'id'>) => void;
+  updateAIConfig: (id: string, updates: Partial<AIConfig>) => void;
+  deleteAIConfig: (id: string) => void;
+  setActiveAIConfig: (id: string | null) => void;
   addDocument: (projectId: string, document: string) => void;
   removeDocument: (projectId: string, document: string) => void;
 }

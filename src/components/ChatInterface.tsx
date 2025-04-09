@@ -7,8 +7,16 @@ export function ChatInterface() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { messages, addMessage, clearMessages } = useChatStore();
-  const { projects, activeProject, setActiveProject, apiSettings } = useProjectStore();
+  const { 
+    projects, 
+    activeProject, 
+    setActiveProject, 
+    apiSettings, 
+    aiConfigs, 
+    activeAIConfigId 
+  } = useProjectStore();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(activeProject?.id || null);
+  const [selectedAIConfigId, setSelectedAIConfigId] = useState<string | null>(activeAIConfigId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -16,6 +24,10 @@ export function ChatInterface() {
       setSelectedProjectId(activeProject.id);
     }
   }, [activeProject]);
+
+  useEffect(() => {
+    setSelectedAIConfigId(activeAIConfigId);
+  }, [activeAIConfigId]);
 
   useEffect(() => {
     clearMessages();
@@ -37,6 +49,21 @@ export function ChatInterface() {
     }
   };
 
+  const handleAIConfigChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const configId = e.target.value || null;
+    setSelectedAIConfigId(configId);
+    
+    if (configId) {
+      const config = aiConfigs.find(c => c.id === configId);
+      if (config) {
+        apiService.setActiveConfig(config);
+      }
+    } else {
+      apiService.setActiveConfig(null);
+      apiService.updateSettings(apiSettings);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
@@ -50,7 +77,15 @@ export function ChatInterface() {
     setIsLoading(true);
 
     try {
-      apiService.updateSettings(apiSettings);
+      if (selectedAIConfigId) {
+        const config = aiConfigs.find(c => c.id === selectedAIConfigId);
+        if (config) {
+          apiService.setActiveConfig(config);
+        }
+      } else {
+        apiService.setActiveConfig(null);
+        apiService.updateSettings(apiSettings);
+      }
 
       let contextPrompt = '';
       if (selectedProjectId) {
@@ -109,23 +144,44 @@ export function ChatInterface() {
     <div className="flex flex-col h-96 bg-gray-900 rounded-lg shadow-lg">
       <div className="p-4 border-b border-gray-700 flex justify-between items-center">
         <h3 className="text-lg font-medium text-gray-100">Chat Interface</h3>
-        <div className="flex items-center space-x-2">
-          <label htmlFor="projectSelect" className="text-sm text-gray-300">
-            Project:
-          </label>
-          <select
-            id="projectSelect"
-            value={selectedProjectId || ''}
-            onChange={handleProjectChange}
-            className="bg-gray-800 border border-gray-700 text-gray-100 text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 p-1.5"
-          >
-            <option value="">Global Chat</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <label htmlFor="aiConfigSelect" className="text-sm text-gray-300">
+              AI Config:
+            </label>
+            <select
+              id="aiConfigSelect"
+              value={selectedAIConfigId || ''}
+              onChange={handleAIConfigChange}
+              className="bg-gray-800 border border-gray-700 text-gray-100 text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 p-1.5"
+            >
+              <option value="">Global Settings</option>
+              {aiConfigs.map((config) => (
+                <option key={config.id} value={config.id}>
+                  {config.name} {config.isVerified ? '✓' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <label htmlFor="projectSelect" className="text-sm text-gray-300">
+              Project:
+            </label>
+            <select
+              id="projectSelect"
+              value={selectedProjectId || ''}
+              onChange={handleProjectChange}
+              className="bg-gray-800 border border-gray-700 text-gray-100 text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 p-1.5"
+            >
+              <option value="">Global Chat</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
       <div className="flex-1 p-4 overflow-y-auto bg-gray-900">
@@ -136,6 +192,11 @@ export function ChatInterface() {
               {selectedProjectId && (
                 <p className="mt-2 text-xs text-gray-400">
                   Chatting about project: {projects.find(p => p.id === selectedProjectId)?.name}
+                </p>
+              )}
+              {selectedAIConfigId && (
+                <p className="mt-2 text-xs text-gray-400">
+                  Using AI config: {aiConfigs.find(c => c.id === selectedAIConfigId)?.name}
                 </p>
               )}
             </div>
