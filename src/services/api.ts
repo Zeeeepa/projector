@@ -10,11 +10,13 @@ export class ApiService {
   private apiBaseUrl: string;
   private apiKey: string | null;
   private githubToken: string | null;
+  private customEndpoint: string | null;
 
   constructor(settings?: APISettings) {
     this.apiBaseUrl = settings?.apiBaseUrl || DEFAULT_API_URL;
     this.apiKey = settings?.apiKey || null;
     this.githubToken = settings?.githubToken || null;
+    this.customEndpoint = settings?.customEndpoint || null;
   }
 
   /**
@@ -29,6 +31,9 @@ export class ApiService {
     }
     if (settings.githubToken) {
       this.githubToken = settings.githubToken;
+    }
+    if (settings.customEndpoint !== undefined) {
+      this.customEndpoint = settings.customEndpoint;
     }
   }
 
@@ -57,7 +62,7 @@ export class ApiService {
   private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `API error: ${response.status}`);
+      throw new Error(errorData.detail || errorData.error?.message || `API error: ${response.status}`);
     }
     return response.json() as Promise<T>;
   }
@@ -208,6 +213,67 @@ export class ApiService {
    * Send a chat message and get a response
    */
   async sendChatMessage(message: string, projectId?: string, chatHistory?: ChatMessage[]): Promise<{ response: string, chat_history: ChatMessage[] }> {
+    // If using OpenAI Compatible endpoint, use that directly
+    if (this.customEndpoint) {
+      try {
+        // Format the chat history for the OpenAI API
+        const messages = chatHistory 
+          ? chatHistory.map(msg => ({
+              role: msg.sender === 'user' ? 'user' : 'assistant',
+              content: msg.content
+            }))
+          : [];
+        
+        // Add the new message
+        messages.push({
+          role: 'user',
+          content: message
+        });
+        
+        // Make the request to the custom endpoint
+        const response = await fetch(this.customEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-3.5-turbo', // This should be configurable
+            messages,
+            max_tokens: 1000,
+            temperature: 0.7
+          })
+        });
+        
+        const data = await this.handleResponse<any>(response);
+        
+        // Extract the response from the OpenAI API
+        const aiResponse = data.choices?.[0]?.message?.content || 'No response from AI';
+        
+        // Add the AI response to the chat history
+        messages.push({
+          role: 'assistant',
+          content: aiResponse
+        });
+        
+        // Transform to our internal format
+        return {
+          response: aiResponse,
+          chat_history: messages.map(msg => ({
+            id: crypto.randomUUID(),
+            content: msg.content,
+            sender: msg.role === 'user' ? 'user' : 'ai',
+            timestamp: new Date().toISOString(),
+            projectId
+          }))
+        };
+      } catch (error) {
+        console.error('Error using custom endpoint:', error);
+        throw error;
+      }
+    }
+    
+    // Otherwise use the backend API
     const response = await fetch(`${this.apiBaseUrl}/api/chat/`, {
       method: 'POST',
       headers: this.getHeaders(),
