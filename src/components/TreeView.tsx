@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface TreeNode {
   id: string;
@@ -13,6 +13,8 @@ interface TreeViewProps {
 }
 
 const TreeView: React.FC<TreeViewProps> = ({ data }) => {
+  const [activeTab, setActiveTab] = useState('structure');
+  
   const renderTreeNode = (node: TreeNode, level: number = 0) => {
     const isCompleted = node.completed;
     const hasChildren = node.children && node.children.length > 0;
@@ -22,17 +24,25 @@ const TreeView: React.FC<TreeViewProps> = ({ data }) => {
       if (level === 0) return '';
       
       const isLast = index === total - 1;
-      return isLast ? '└── ' : '├── ';
+      return isLast ? '\u2514\u2500\u2500 ' : '\u251c\u2500\u2500 ';
     };
     
     const getChildPrefix = (index: number, total: number) => {
       const isLast = index === total - 1;
-      return isLast ? '    ' : '│   ';
+      return isLast ? '    ' : '\u2502   ';
+    };
+    
+    // Determine color based on progress
+    const getProgressColor = (progress: number) => {
+      if (progress === 100) return 'text-green-600';
+      if (progress >= 50) return 'text-yellow-600';
+      if (progress > 0) return 'text-orange-500';
+      return 'text-gray-500';
     };
     
     return (
       <div key={node.id} className="font-mono">
-        <div className="flex items-center">
+        <div className="flex items-center py-1 hover:bg-gray-50">
           {level > 0 && (
             <span className="text-gray-500">
               {getPrefix(0, 1, level)}
@@ -40,10 +50,10 @@ const TreeView: React.FC<TreeViewProps> = ({ data }) => {
           )}
           <span className="font-medium">{node.name}</span>
           {node.progress !== undefined && (
-            <span className="ml-2 text-gray-500">[{node.progress}%]</span>
+            <span className={`ml-2 ${getProgressColor(node.progress)}`}>[{node.progress}%]</span>
           )}
-          <span className="ml-2">
-            {isCompleted ? '[✓]' : '[ ]'}
+          <span className={`ml-2 ${isCompleted ? 'text-green-600' : 'text-gray-500'}`}>
+            {isCompleted ? '[\u2713]' : '[ ]'}
           </span>
         </div>
         
@@ -66,14 +76,29 @@ const TreeView: React.FC<TreeViewProps> = ({ data }) => {
   };
 
   return (
-    <div className="p-4 border rounded-lg overflow-auto">
-      <div className="flex space-x-4 mb-4 border-b pb-2">
-        <button className="font-medium text-blue-600">Tree Structure</button>
-        <button className="font-medium text-gray-500">Component Integration</button>
-        <button className="font-medium text-gray-500">Completion</button>
+    <div className="border rounded-lg overflow-auto bg-white shadow-sm">
+      <div className="flex space-x-4 mb-2 border-b p-2">
+        <button 
+          className={`font-medium ${activeTab === 'structure' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setActiveTab('structure')}
+        >
+          Tree Structure
+        </button>
+        <button 
+          className={`font-medium ${activeTab === 'component' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setActiveTab('component')}
+        >
+          Component Integration
+        </button>
+        <button 
+          className={`font-medium ${activeTab === 'completion' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setActiveTab('completion')}
+        >
+          Completion
+        </button>
       </div>
       
-      <div className="space-y-2">
+      <div className="p-2 space-y-1">
         {data.map(node => renderTreeNode(node))}
       </div>
     </div>
