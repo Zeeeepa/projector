@@ -2,44 +2,31 @@
 FastAPI backend for the Projector application.
 """
 import os
-import sys
 import logging
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from pydantic import BaseModel
 
-# Add the project root to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-
-# Add the src directory to the Python path for codegen modules
-src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src'))
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
-
-# Load environment variables
-load_dotenv()
-
-# Import backend components
-from projector.backend.config import (
-    SLACK_USER_TOKEN, GITHUB_TOKEN, GITHUB_USERNAME,
-    SLACK_DEFAULT_CHANNEL, GITHUB_DEFAULT_REPO
-)
-from projector.backend.slack_manager import SlackManager
-from projector.backend.github_manager import GitHubManager
-from projector.backend.project_database import ProjectDatabase
-from projector.backend.project_manager import ProjectManager
-from projector.backend.thread_pool import ThreadPool
-from projector.backend.ai_user_agent import AIUserAgent
-
-# Import API routes
-from projector.api.routes import projects, github, slack, chat, code_improvement
+# Load environment variables with explicit encoding
+try:
+    load_dotenv(encoding="utf-8")
+except Exception as e:
+    print(f"Error loading .env file: {e}")
+    # Create a default .env file if it doesn't exist or has encoding issues
+    with open(".env", "w", encoding="utf-8") as f:
+        f.write("# API Configuration\n")
+        f.write("API_PORT=8000\n")
+        f.write("API_HOST=0.0.0.0\n")
+        f.write("DEBUG=True\n")
+    # Try loading again
+    load_dotenv(encoding="utf-8")
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("projector/api.log"),
         logging.StreamHandler()
     ]
 )
@@ -62,62 +49,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize backend components
-slack_manager = SlackManager(
-    slack_token=SLACK_USER_TOKEN,
-    default_channel=SLACK_DEFAULT_CHANNEL
-)
+# Define models
+class Project(BaseModel):
+    id: str
+    name: str
+    description: str
+    github_url: str = None
+    slack_channel: str = None
 
-github_manager = GitHubManager(
-    github_token=GITHUB_TOKEN,
-    github_username=GITHUB_USERNAME,
-    default_repo=GITHUB_DEFAULT_REPO
-)
+class ProjectCreate(BaseModel):
+    name: str
+    description: str
+    github_url: str = None
+    slack_channel: str = None
 
-thread_pool = ThreadPool(max_threads=10)
+# Sample data
+projects = []
 
-project_database = ProjectDatabase()
+# API Routes
+@app.get("/api/projects")
+async def get_projects():
+    """Get all projects."""
+    return projects
 
-project_manager = ProjectManager(
-    github_manager=github_manager,
-    slack_manager=slack_manager,
-    thread_pool=thread_pool
-)
-
-ai_user_agent = AIUserAgent(
-    slack_manager=slack_manager,
-    github_manager=github_manager,
-    project_database=project_database,
-    project_manager=project_manager,
-    thread_pool=thread_pool,
-    docs_path="docs"
-)
-
-# Dependency to get backend components
-def get_slack_manager():
-    return slack_manager
-
-def get_github_manager():
-    return github_manager
-
-def get_project_database():
-    return project_database
-
-def get_project_manager():
-    return project_manager
-
-def get_ai_user_agent():
-    return ai_user_agent
-
-def get_thread_pool():
-    return thread_pool
-
-# Include API routes
-app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-app.include_router(github.router, prefix="/api/github", tags=["github"])
-app.include_router(slack.router, prefix="/api/slack", tags=["slack"])
-app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
-app.include_router(code_improvement.router, prefix="/api/code-improvement", tags=["code-improvement"])
+@app.post("/api/projects")
+async def create_project(project: ProjectCreate):
+    """Create a new project."""
+    new_project = Project(
+        id=f"proj_{len(projects) + 1}",
+        name=project.name,
+        description=project.description,
+        github_url=project.github_url,
+        slack_channel=project.slack_channel
+    )
+    projects.append(new_project)
+    return new_project
 
 @app.get("/api/health")
 async def health_check():

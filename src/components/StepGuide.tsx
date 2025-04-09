@@ -1,153 +1,170 @@
-import React from 'react';
-import { CheckCircle2, Circle, Plus } from 'lucide-react';
+import React, { useState } from 'react';
 
-export function StepGuide() {
-  const [selectedFeature, setSelectedFeature] = React.useState('Two-Factor Authentication');
-  const [description, setDescription] = React.useState(
-    'Implement TOTP-based two-factor authentication for enhanced security with backup codes and device remembering functionality.'
-  );
-  const [dependencies, setDependencies] = React.useState([
-    { name: 'User Authentication Module', completed: true },
-  ]);
+interface Step {
+  id: string;
+  title: string;
+  description: string;
+  completed: boolean;
+  subtasks: {
+    id: string;
+    title: string;
+    completed: boolean;
+  }[];
+}
 
-  const steps = [
-    {
-      title: 'Update User Schema',
-      tasks: [
-        { text: 'Add TOTP secret field', completed: false },
-        { text: 'Add backup codes field', completed: false },
-        { text: 'Add 2FA enabled flag', completed: false },
-      ],
-    },
-    {
-      title: 'Implement TOTP Generation',
-      tasks: [
-        { text: 'Add pyotp library', completed: true },
-        { text: 'Create secret generation function', completed: true },
-        { text: 'Implement QR code generation', completed: false },
-      ],
-    },
-    {
-      title: 'Create API Endpoints',
-      tasks: [
-        { text: 'Enable/disable 2FA endpoint', completed: false },
-        { text: 'Verify TOTP code endpoint', completed: false },
-        { text: 'Generate backup codes endpoint', completed: false },
-      ],
-    },
-    {
-      title: 'Update Login Flow',
-      tasks: [
-        { text: 'Modify authentication process', completed: false },
-        { text: 'Add 2FA verification step', completed: false },
-        { text: 'Implement remember device functionality', completed: false },
-      ],
-    },
-    {
-      title: 'Create Frontend Components',
-      tasks: [
-        { text: '2FA setup page', completed: false },
-        { text: 'TOTP verification modal', completed: false },
-        { text: 'Backup codes display', completed: false },
-      ],
-    },
-    {
-      title: 'Testing and Documentation',
-      tasks: [
-        { text: 'Unit tests for all components', completed: false },
-        { text: 'Integration tests for the flow', completed: false },
-        { text: 'User documentation', completed: false },
-      ],
-    },
-  ];
+interface StepGuideProps {
+  projectId: string;
+  featureName: string;
+  featureDescription: string;
+  dependencies: {
+    id: string;
+    name: string;
+    completed: boolean;
+  }[];
+  steps: Step[];
+}
+
+const StepGuide: React.FC<StepGuideProps> = ({
+  projectId,
+  featureName,
+  featureDescription,
+  dependencies,
+  steps,
+}) => {
+  const [newDependency, setNewDependency] = useState('');
+
+  const handleAddDependency = () => {
+    // Implementation would go here
+    setNewDependency('');
+  };
+
+  const handleToggleStep = (stepId: string) => {
+    // Implementation would go here
+  };
+
+  const handleToggleSubtask = (stepId: string, subtaskId: string) => {
+    // Implementation would go here
+  };
+
+  const handleGenerateCode = () => {
+    // Implementation would go here
+  };
+
+  const handleAddToProject = () => {
+    // Implementation would go here
+  };
+
+  const handleExportPlan = () => {
+    // Implementation would go here
+  };
 
   return (
-    <div className="p-4 space-y-6">
-      {/* Feature Selection */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-medium text-gray-300">Feature</h4>
-          <button className="text-indigo-400 hover:text-indigo-300 text-sm">
-            <Plus className="h-4 w-4 inline mr-1" /> Add Feature
-          </button>
+    <div className="flex flex-col h-full border rounded-lg overflow-hidden">
+      <div className="p-4 bg-gray-50 border-b">
+        <h2 className="text-xl font-semibold mb-4">Step by step Structure View generated from user's Docs</h2>
+        
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Feature:</label>
+          <input
+            type="text"
+            value={featureName}
+            readOnly
+            className="w-full p-2 border rounded-md bg-white"
+          />
         </div>
-        <input
-          type="text"
-          value={selectedFeature}
-          onChange={(e) => setSelectedFeature(e.target.value)}
-          className="w-full bg-gray-700 border-gray-600 text-gray-100 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
-        />
-      </div>
-
-      {/* Description */}
-      <div className="space-y-2">
-        <h4 className="text-sm font-medium text-gray-300">Description</h4>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={3}
-          className="w-full bg-gray-700 border-gray-600 text-gray-100 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
-        />
-      </div>
-
-      {/* Dependencies */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-medium text-gray-300">Dependencies</h4>
-          <button className="text-indigo-400 hover:text-indigo-300 text-sm">
-            <Plus className="h-4 w-4 inline mr-1" /> Add Dependency
-          </button>
+        
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Description:</label>
+          <textarea
+            value={featureDescription}
+            readOnly
+            rows={3}
+            className="w-full p-2 border rounded-md bg-white"
+          />
         </div>
-        <div className="space-y-2">
-          {dependencies.map((dep, index) => (
-            <div key={index} className="flex items-center space-x-2">
-              {dep.completed ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              ) : (
-                <Circle className="h-4 w-4 text-gray-500" />
-              )}
-              <span className="text-sm text-gray-300">{dep.name}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Implementation Steps */}
-      <div className="space-y-4">
-        <h4 className="text-sm font-medium text-gray-300">Generated Plan</h4>
-        <div className="space-y-4">
-          {steps.map((step, index) => (
-            <div key={index} className="space-y-2">
-              <h5 className="text-sm font-medium text-gray-300">{step.title}</h5>
-              <div className="space-y-1">
-                {step.tasks.map((task, taskIndex) => (
-                  <div key={taskIndex} className="flex items-center space-x-2">
-                    {task.completed ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <Circle className="h-4 w-4 text-gray-500" />
-                    )}
-                    <span className="text-sm text-gray-300">{task.text}</span>
-                  </div>
-                ))}
+        
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Dependencies:</label>
+          <div className="space-y-2">
+            {dependencies.map((dep) => (
+              <div key={dep.id} className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={dep.completed}
+                  readOnly
+                  className="mr-2"
+                />
+                <span>{dep.name}</span>
               </div>
+            ))}
+            <div className="flex items-center mt-2">
+              <input
+                type="text"
+                value={newDependency}
+                onChange={(e) => setNewDependency(e.target.value)}
+                placeholder="Add New Dependencies..."
+                className="flex-1 p-2 border rounded-md"
+              />
+              <button
+                onClick={handleAddDependency}
+                className="ml-2 px-3 py-2 bg-blue-500 text-white rounded-md"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="flex-1 overflow-auto p-4 border-b">
+        <h3 className="text-lg font-semibold mb-4">Generated Plan:</h3>
+        <div className="space-y-6">
+          {steps.map((step, index) => (
+            <div key={step.id} className="space-y-2">
+              <div className="flex items-start">
+                <span className="font-semibold mr-2">{index + 1}.</span>
+                <span className="font-semibold">{step.title}</span>
+              </div>
+              {step.subtasks.map((subtask) => (
+                <div key={subtask.id} className="flex items-center ml-6">
+                  <input
+                    type="checkbox"
+                    checked={subtask.completed}
+                    onChange={() => handleToggleSubtask(step.id, subtask.id)}
+                    className="mr-2"
+                  />
+                  <span className={subtask.completed ? 'line-through text-gray-500' : ''}>
+                    - {subtask.title}
+                  </span>
+                </div>
+              ))}
             </div>
           ))}
         </div>
       </div>
-
-      {/* Action Buttons */}
-      <div className="flex space-x-3 pt-4">
-        <button className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+      
+      <div className="p-4 bg-gray-50 flex justify-end space-x-4">
+        <button
+          onClick={handleGenerateCode}
+          className="px-4 py-2 bg-green-500 text-white rounded-md"
+        >
           Generate Code Stubs
         </button>
-        <button className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+        <button
+          onClick={handleAddToProject}
+          className="px-4 py-2 bg-blue-500 text-white rounded-md"
+        >
           Add to Project
         </button>
-        <button className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+        <button
+          onClick={handleExportPlan}
+          className="px-4 py-2 bg-gray-700 text-white rounded-md"
+        >
           Export Plan
         </button>
       </div>
     </div>
   );
-}
+};
+
+export default StepGuide;
