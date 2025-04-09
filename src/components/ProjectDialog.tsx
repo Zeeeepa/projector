@@ -12,7 +12,6 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
   const [description, setDescription] = useState('');
   const [githubUrl, setGithubUrl] = useState('');
   const [slackChannel, setSlackChannel] = useState('');
-  const [threads, setThreads] = useState(2);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -39,7 +38,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
         description,
         githubUrl,
         slackChannel,
-        threads
+        threads: 2 // Default value, can be changed in project tab
       });
 
       // Add project to the store
@@ -67,7 +66,6 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
     setDescription('');
     setGithubUrl('');
     setSlackChannel('');
-    setThreads(2);
     setError(null);
   };
 
@@ -75,7 +73,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6">
+      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-md p-6 border border-gray-700">
         <h2 className="text-xl font-semibold text-gray-100 mb-4">Add New Project</h2>
         
         {error && (
@@ -95,7 +93,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 disabled={isLoading}
                 required
               />
@@ -110,7 +108,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
-                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 disabled={isLoading}
               />
             </div>
@@ -124,7 +122,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 id="githubUrl"
                 value={githubUrl}
                 onChange={(e) => setGithubUrl(e.target.value)}
-                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 placeholder="https://github.com/username/repo"
                 disabled={isLoading}
                 required
@@ -140,31 +138,12 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 id="slackChannel"
                 value={slackChannel}
                 onChange={(e) => setSlackChannel(e.target.value)}
-                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 placeholder="e.g. C01234ABCDE"
                 disabled={isLoading}
               />
               <p className="mt-1 text-xs text-gray-400">
                 Find this in Slack by right-clicking on a channel and selecting "Copy Link"
-              </p>
-            </div>
-            
-            <div>
-              <label htmlFor="threads" className="block text-sm font-medium text-gray-300">
-                Concurrent Threads
-              </label>
-              <input
-                type="number"
-                id="threads"
-                min="1"
-                max="10"
-                value={threads}
-                onChange={(e) => setThreads(parseInt(e.target.value))}
-                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                disabled={isLoading}
-              />
-              <p className="mt-1 text-xs text-gray-400">
-                Number of concurrent tasks (1-10)
               </p>
             </div>
           </div>
