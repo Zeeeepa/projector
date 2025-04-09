@@ -11,12 +11,16 @@ export class ApiService {
   private apiKey: string | null;
   private githubToken: string | null;
   private customEndpoint: string | null;
+  private aiProvider: string | null;
+  private model: string | null;
 
   constructor(settings?: APISettings) {
     this.apiBaseUrl = settings?.apiBaseUrl || DEFAULT_API_URL;
     this.apiKey = settings?.apiKey || null;
     this.githubToken = settings?.githubToken || null;
     this.customEndpoint = settings?.customEndpoint || null;
+    this.aiProvider = settings?.aiProvider || null;
+    this.model = settings?.model || null;
   }
 
   /**
@@ -34,6 +38,12 @@ export class ApiService {
     }
     if (settings.customEndpoint !== undefined) {
       this.customEndpoint = settings.customEndpoint;
+    }
+    if (settings.aiProvider) {
+      this.aiProvider = settings.aiProvider;
+    }
+    if (settings.model) {
+      this.model = settings.model;
     }
   }
 
@@ -210,6 +220,148 @@ export class ApiService {
   }
 
   /**
+   * Generate a project plan based on requirements
+   */
+  async generateProjectPlan(projectId: string, context: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // If using direct AI provider, use that instead of backend
+      if (this.aiProvider && this.apiKey) {
+        const prompt = `
+You are an expert software architect and project planner. 
+Based on the following project requirements, create:
+1. A step-by-step implementation plan
+2. A high-level project structure with key components and their relationships
+
+Requirements:
+${context}
+
+Format your response as follows:
+IMPLEMENTATION_PLAN:
+1. [First step with description]
+   - [Subtask 1]
+   - [Subtask 2]
+2. [Second step with description]
+   - [Subtask 1]
+   - [Subtask 2]
+...
+
+PROJECT_STRUCTURE:
+- [Component 1]
+  - [Subcomponent 1.1]
+  - [Subcomponent 1.2]
+- [Component 2]
+  - [Subcomponent 2.1]
+...
+
+Be specific, practical, and focus on creating a realistic implementation plan.
+`;
+
+        let response;
+        
+        if (this.aiProvider === 'Open_AI' || this.aiProvider === 'Open_AI_Compatible') {
+          const endpoint = this.aiProvider === 'Open_AI' 
+            ? 'https://api.openai.com/v1/chat/completions'
+            : this.customEndpoint;
+            
+          if (!endpoint) {
+            throw new Error('No API endpoint configured');
+          }
+          
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey}`
+            },
+            body: JSON.stringify({
+              model: this.model || 'gpt-3.5-turbo',
+              messages: [{ role: 'user', content: prompt }],
+              max_tokens: 2000,
+              temperature: 0.7
+            })
+          });
+          
+          const data = await this.handleResponse<any>(response);
+          const planText = data.choices?.[0]?.message?.content;
+          
+          if (planText) {
+            // Store the generated plan in the backend
+            await this.savePlanToBackend(projectId, planText);
+            return { success: true };
+          } else {
+            throw new Error('Failed to generate plan: No response from AI');
+          }
+        } else if (this.aiProvider === 'Anthropic') {
+          response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'anthropic-version': '2023-06-01',
+              'Authorization': `Bearer ${this.apiKey}`
+            },
+            body: JSON.stringify({
+              model: this.model || 'claude-3-haiku-20240307',
+              messages: [{ role: 'user', content: prompt }],
+              max_tokens: 2000
+            })
+          });
+          
+          const data = await this.handleResponse<any>(response);
+          const planText = data.content?.[0]?.text;
+          
+          if (planText) {
+            // Store the generated plan in the backend
+            await this.savePlanToBackend(projectId, planText);
+            return { success: true };
+          } else {
+            throw new Error('Failed to generate plan: No response from AI');
+          }
+        } else {
+          throw new Error(`Unsupported AI provider: ${this.aiProvider}`);
+        }
+      }
+      
+      // Otherwise use the backend API
+      const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}/generate-plan`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          context
+        }),
+      });
+
+      await this.handleResponse<any>(response);
+      return { success: true };
+    } catch (error) {
+      console.error('Error generating project plan:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to generate plan'
+      };
+    }
+  }
+
+  /**
+   * Save a generated plan to the backend
+   */
+  private async savePlanToBackend(projectId: string, planText: string): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}/save-plan`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          plan: planText
+        }),
+      });
+
+      await this.handleResponse<any>(response);
+    } catch (error) {
+      console.error('Error saving plan to backend:', error);
+      // We don't throw here to avoid breaking the flow if backend storage fails
+    }
+  }
+
+  /**
    * Send a chat message and get a response
    */
   async sendChatMessage(message: string, projectId?: string, chatHistory?: ChatMessage[]): Promise<{ response: string, chat_history: ChatMessage[] }> {
@@ -238,7 +390,7 @@ export class ApiService {
             'Authorization': `Bearer ${this.apiKey}`
           },
           body: JSON.stringify({
-            model: 'gpt-3.5-turbo', // This should be configurable
+            model: this.model || 'gpt-3.5-turbo',
             messages,
             max_tokens: 1000,
             temperature: 0.7

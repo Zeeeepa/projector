@@ -4,12 +4,14 @@ import TreeView from './TreeView';
 import { ChatInterface } from './ChatInterface';
 import { ProjectDialog } from './ProjectDialog';
 import { SettingsDialog } from './SettingsDialog';
+import RequirementsManager from './RequirementsManager';
 import { useProjectStore } from '../store';
 
 const MainLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+  const [activeView, setActiveView] = useState<'requirements' | 'context'>('context');
   const { projects, setActiveProject, updateProject, activeProject } = useProjectStore();
   const [concurrency, setConcurrency] = useState<number>(2);
   
@@ -84,9 +86,6 @@ const MainLayout: React.FC = () => {
           {activeProject ? (
             <StepGuide 
               projectId={activeProject.id}
-              featureName=""
-              featureDescription=""
-              dependencies={[]}
               steps={[]}
             />
           ) : (
@@ -122,8 +121,36 @@ const MainLayout: React.FC = () => {
           <div className="flex-1 overflow-auto p-4">
             {activeProject ? (
               <>
-                <div className="mb-4">
-                  <h2 className="text-xl font-semibold mb-2">Project Context</h2>
+                <div className="mb-4 flex justify-between items-center">
+                  <div className="flex space-x-4">
+                    <button
+                      className={`px-4 py-2 rounded-md ${activeView === 'context' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
+                      onClick={() => setActiveView('context')}
+                    >
+                      Project Context
+                    </button>
+                    <button
+                      className={`px-4 py-2 rounded-md ${activeView === 'requirements' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
+                      onClick={() => setActiveView('requirements')}
+                    >
+                      Requirements
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium text-gray-300">Concurrency</span>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="10" 
+                      value={concurrency}
+                      onChange={handleConcurrencyChange}
+                      className="w-16 p-1 border border-gray-600 rounded bg-gray-700 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                    />
+                  </div>
+                </div>
+                
+                {activeView === 'context' ? (
                   <div className="p-4 border border-gray-700 rounded-lg bg-gray-800 shadow-sm">
                     <p className="text-gray-300">
                       {activeProject.description || 'No description provided for this project.'}
@@ -137,21 +164,9 @@ const MainLayout: React.FC = () => {
                       )}
                     </div>
                   </div>
-                </div>
-                
-                <div className="flex justify-between items-center mb-4">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-medium text-gray-300">Concurrency</span>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      max="10" 
-                      value={concurrency}
-                      onChange={handleConcurrencyChange}
-                      className="w-16 p-1 border border-gray-600 rounded bg-gray-700 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                    />
-                  </div>
-                </div>
+                ) : (
+                  <RequirementsManager projectId={activeProject.id} />
+                )}
               </>
             ) : (
               <div className="flex items-center justify-center h-full">
