@@ -1,137 +1,292 @@
 #!/usr/bin/env pwsh
-# Backend Deployment Script for Projector
+# Backend deployment script for Projector
 
-# Configuration
-$PYTHON_VERSION = "3.10"
-$VENV_NAME = "projector-env"
-$BACKEND_DIR = "./api"
-$REQUIREMENTS_FILE = "./requirements.txt"
-$LOG_FILE = "./backend_deploy.log"
-
-# Create log file
-New-Item -Path $LOG_FILE -ItemType File -Force | Out-Null
-function Write-Log {
+# Function to log messages with timestamp
+function Log-Message {
     param (
-        [string]$Message
+        [string]$message
     )
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    "$timestamp - $Message" | Tee-Object -FilePath $LOG_FILE -Append
+    Write-Host "$timestamp - $message"
 }
-
-Write-Log "Starting backend deployment process..."
 
 # Check if Python is installed
+$pythonVersion = $null
 try {
     $pythonVersion = python --version
-    Write-Log "Python detected: $pythonVersion"
+    Log-Message "Python detected: $pythonVersion"
 } catch {
-    Write-Log "ERROR: Python not found. Please install Python $PYTHON_VERSION or later."
-    exit 1
-}
-
-# Create virtual environment if it doesn't exist
-if (-not (Test-Path -Path $VENV_NAME)) {
-    Write-Log "Creating virtual environment: $VENV_NAME"
-    python -m venv $VENV_NAME
-    if (-not $?) {
-        Write-Log "ERROR: Failed to create virtual environment."
+    try {
+        $pythonVersion = python3 --version
+        Log-Message "Python detected: $pythonVersion"
+        $pythonCmd = "python3"
+    } catch {
+        Log-Message "ERROR: Python is not installed. Please install Python 3.8 or later before continuing."
         exit 1
     }
-} else {
-    Write-Log "Virtual environment already exists: $VENV_NAME"
 }
 
-# Activate virtual environment
-Write-Log "Activating virtual environment..."
-if ($IsWindows -or $env:OS -match "Windows") {
-    # Windows path
-    $activateScript = "./$VENV_NAME/Scripts/Activate.ps1"
-    if (Test-Path -Path $activateScript) {
-        & $activateScript
-    } else {
-        Write-Log "WARNING: Activation script not found at $activateScript. Continuing without activation."
-    }
-} else {
-    # Unix path
-    $activateScript = "./$VENV_NAME/bin/Activate.ps1"
-    if (Test-Path -Path $activateScript) {
-        & $activateScript
-    } else {
-        Write-Log "WARNING: Activation script not found at $activateScript. Continuing without activation."
-    }
+if (-not $pythonCmd) {
+    $pythonCmd = "python"
 }
 
-# Install or update dependencies
-if (Test-Path -Path $REQUIREMENTS_FILE) {
-    Write-Log "Installing dependencies from $REQUIREMENTS_FILE"
-    pip install -r $REQUIREMENTS_FILE
-    if (-not $?) {
-        Write-Log "ERROR: Failed to install dependencies."
-        exit 1
-    }
+# Set up virtual environment
+$VENV_NAME = "projector-env"
+Log-Message "Creating virtual environment: $VENV_NAME"
+
+# Create virtual environment
+& $pythonCmd -m venv $VENV_NAME
+
+# Activate virtual environment based on OS
+Log-Message "Activating virtual environment..."
+if ($IsWindows) {
+    & "./$VENV_NAME/Scripts/Activate.ps1"
 } else {
-    Write-Log "Installing required packages..."
-    pip install fastapi uvicorn python-dotenv pydantic sqlalchemy
-    if (-not $?) {
-        Write-Log "ERROR: Failed to install required packages."
-        exit 1
-    }
-    
-    # Create requirements.txt for future use
-    pip freeze > $REQUIREMENTS_FILE
-    Write-Log "Created $REQUIREMENTS_FILE for future deployments."
+    & "./$VENV_NAME/bin/Activate.ps1"
 }
 
-# Check for environment file
-$ENV_FILE = "./.env"
-if (-not (Test-Path -Path $ENV_FILE)) {
-    Write-Log "Creating sample .env file..."
+# Install required packages
+Log-Message "Installing required packages..."
+& $pythonCmd -m pip install fastapi uvicorn python-dotenv pydantic sqlalchemy
+
+# Create requirements.txt for future deployments
+& $pythonCmd -m pip freeze > ./requirements.txt
+Log-Message "Created ./requirements.txt for future deployments."
+
+# Create sample .env file if it doesn't exist
+if (-not (Test-Path -Path "./.env")) {
+    Log-Message "Creating sample .env file..."
     @"
-# API Configuration
-API_PORT=8000
-API_HOST=0.0.0.0
+# Backend Environment Variables
+DATABASE_URL=sqlite:///./app.db
+SECRET_KEY=your-secret-key-here
 DEBUG=True
-
-# Database Configuration
-DATABASE_URL=sqlite:///./projector.db
-
-# GitHub Configuration
-GITHUB_TOKEN=your_github_token
-
-# Slack Configuration
-SLACK_BOT_TOKEN=your_slack_bot_token
-SLACK_SIGNING_SECRET=your_slack_signing_secret
-
-# AI Configuration
-OPENAI_API_KEY=your_openai_api_key
-AI_MODEL=gpt-4
-"@ | Out-File -FilePath $ENV_FILE -Encoding utf8
-    Write-Log "Created sample .env file. Please update with your actual configuration."
+ALLOWED_HOSTS=localhost,127.0.0.1
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+"@ | Out-File -FilePath "./.env" -Encoding utf8
+    Log-Message "Created sample .env file. Please update with your actual configuration."
 }
 
-# Run database migrations if needed
-Write-Log "Setting up database..."
-if (Test-Path -Path "$BACKEND_DIR/models") {
-    python -c "from api.models import *; print('Database models initialized')"
-    if (-not $?) {
-        Write-Log "WARNING: Failed to initialize database models."
-    }
+# Set up database
+Log-Message "Setting up database..."
+if (-not (Test-Path -Path "./api")) {
+    New-Item -Path "./api" -ItemType Directory
+}
+
+if (-not (Test-Path -Path "./api/models.py")) {
+    @"
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from datetime import datetime
+
+Base = declarative_base()
+
+class Project(Base):
+    __tablename__ = "projects"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    github_url = Column(String(255), nullable=True)
+    slack_channel = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    features = relationship("Feature", back_populates="project")
+
+class Feature(Base):
+    __tablename__ = "features"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    progress = Column(Integer, default=0)
+    completed = Column(Boolean, default=False)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    project = relationship("Project", back_populates="features")
+    tasks = relationship("Task", back_populates="feature")
+
+class Task(Base):
+    __tablename__ = "tasks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    progress = Column(Integer, default=0)
+    completed = Column(Boolean, default=False)
+    feature_id = Column(Integer, ForeignKey("features.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    feature = relationship("Feature", back_populates="tasks")
+
+print("Database models initialized")
+"@ | Out-File -FilePath "./api/models.py" -Encoding utf8
+}
+
+if (-not (Test-Path -Path "./api/main.py")) {
+    @"
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from typing import List, Optional
+from pydantic import BaseModel
+from datetime import datetime
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Create FastAPI app
+app = FastAPI(title="Projector API", description="API for Projector application")
+
+# Configure CORS
+origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Database setup
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from api.models import Base, Project, Feature, Task
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./app.db")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+# Dependency to get DB session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Pydantic models for API
+class TaskBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    progress: int = 0
+    completed: bool = False
+
+class TaskCreate(TaskBase):
+    pass
+
+class TaskResponse(TaskBase):
+    id: int
+    feature_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class FeatureBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    progress: int = 0
+    completed: bool = False
+
+class FeatureCreate(FeatureBase):
+    pass
+
+class FeatureResponse(FeatureBase):
+    id: int
+    project_id: int
+    created_at: datetime
+    updated_at: datetime
+    tasks: List[TaskResponse] = []
+
+    class Config:
+        orm_mode = True
+
+class ProjectBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    github_url: Optional[str] = None
+    slack_channel: Optional[str] = None
+
+class ProjectCreate(ProjectBase):
+    pass
+
+class ProjectResponse(ProjectBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    features: List[FeatureResponse] = []
+
+    class Config:
+        orm_mode = True
+
+# API Routes
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to Projector API"}
+
+@app.get("/projects", response_model=List[ProjectResponse])
+def get_projects(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    projects = db.query(Project).offset(skip).limit(limit).all()
+    return projects
+
+@app.post("/projects", response_model=ProjectResponse)
+def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
+    db_project = Project(**project.dict())
+    db.add(db_project)
+    db.commit()
+    db.refresh(db_project)
+    return db_project
+
+@app.get("/projects/{project_id}", response_model=ProjectResponse)
+def get_project(project_id: int, db: Session = Depends(get_db)):
+    db_project = db.query(Project).filter(Project.id == project_id).first()
+    if db_project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return db_project
+
+@app.post("/projects/{project_id}/features", response_model=FeatureResponse)
+def create_feature(project_id: int, feature: FeatureCreate, db: Session = Depends(get_db)):
+    db_project = db.query(Project).filter(Project.id == project_id).first()
+    if db_project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    db_feature = Feature(**feature.dict(), project_id=project_id)
+    db.add(db_feature)
+    db.commit()
+    db.refresh(db_feature)
+    return db_feature
+
+@app.post("/features/{feature_id}/tasks", response_model=TaskResponse)
+def create_task(feature_id: int, task: TaskCreate, db: Session = Depends(get_db)):
+    db_feature = db.query(Feature).filter(Feature.id == feature_id).first()
+    if db_feature is None:
+        raise HTTPException(status_code=404, detail="Feature not found")
+    
+    db_task = Task(**task.dict(), feature_id=feature_id)
+    db.add(db_task)
+    db.commit()
+    db.refresh(db_task)
+    return db_task
+"@ | Out-File -FilePath "./api/main.py" -Encoding utf8
 }
 
 # Start the backend server
-Write-Log "Starting backend server..."
-$serverProcess = Start-Process -FilePath "python" -ArgumentList "-m uvicorn api.main:app --reload --host 0.0.0.0 --port 8000" -PassThru -NoNewWindow
-
-Write-Log "Backend server started with PID: $($serverProcess.Id)"
-Write-Log "API is now available at http://localhost:8000"
-Write-Log "API documentation is available at http://localhost:8000/docs"
-Write-Log "To stop the server, press Ctrl+C or kill process $($serverProcess.Id)"
-
-# Keep the script running until manually terminated
-try {
-    Wait-Process -Id $serverProcess.Id
-} catch {
-    Write-Log "Backend server process terminated."
-}
-
-Write-Log "Backend deployment completed."
+Log-Message "Starting backend server..."
+$serverProcess = Start-Process -FilePath $pythonCmd -ArgumentList "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--reload" -PassThru -NoNewWindow
+Log-Message "Backend server started with PID: $($serverProcess.Id)"
+Log-Message "API is now available at http://localhost:8000"
+Log-Message "API documentation is available at http://localhost:8000/docs"
+Log-Message "To stop the server, press Ctrl+C or kill process $($serverProcess.Id)"
