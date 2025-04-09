@@ -81,7 +81,7 @@ const MainLayout: React.FC = () => {
       
       <div className="flex flex-1 overflow-hidden">
         <div className="w-1/4 border-r border-gray-700 bg-gray-800 overflow-auto">
-          {activeProject && (
+          {activeProject ? (
             <StepGuide 
               projectId={activeProject.id}
               featureName=""
@@ -89,6 +89,10 @@ const MainLayout: React.FC = () => {
               dependencies={[]}
               steps={[]}
             />
+          ) : (
+            <div className="p-4 text-gray-400 text-center">
+              <p>No project selected. Add a project to get started.</p>
+            </div>
           )}
         </div>
         
@@ -116,37 +120,72 @@ const MainLayout: React.FC = () => {
           </div>
           
           <div className="flex-1 overflow-auto p-4">
-            <div className="mb-4">
-              <h2 className="text-xl font-semibold mb-2">Project's context document View</h2>
-              <div className="p-4 border border-gray-700 rounded-lg bg-gray-800 shadow-sm">
-                <p className="text-gray-300">This document contains important information about the project requirements, goals, and constraints. You can add or modify content here to update the project specifications.</p>
+            {activeProject ? (
+              <>
+                <div className="mb-4">
+                  <h2 className="text-xl font-semibold mb-2">Project Context</h2>
+                  <div className="p-4 border border-gray-700 rounded-lg bg-gray-800 shadow-sm">
+                    <p className="text-gray-300">
+                      {activeProject.description || 'No description provided for this project.'}
+                    </p>
+                    <div className="mt-2">
+                      <p className="text-gray-400 text-sm">GitHub: <a href={activeProject.githubUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{activeProject.githubUrl}</a></p>
+                      {activeProject.slackChannel && (
+                        <p className="text-gray-400 text-sm">Slack Channel: {activeProject.slackChannel}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium text-gray-300">Concurrency</span>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="10" 
+                      value={concurrency}
+                      onChange={handleConcurrencyChange}
+                      className="w-16 p-1 border border-gray-600 rounded bg-gray-700 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                    />
+                  </div>
+                  <button className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 transition text-gray-200">Project Settings</button>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center p-8 max-w-md">
+                  <h2 className="text-2xl font-bold text-gray-300 mb-4">Welcome to Projector</h2>
+                  <p className="text-gray-400 mb-6">Get started by adding a project using the "Add Project" button in the top right.</p>
+                  <button 
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition"
+                    onClick={() => setIsProjectDialogOpen(true)}
+                  >
+                    Add Your First Project
+                  </button>
+                </div>
               </div>
-            </div>
-            
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center space-x-2">
-                <span className="font-medium text-gray-300">Concurrency</span>
-                <input 
-                  type="number" 
-                  min="1" 
-                  max="10" 
-                  value={concurrency}
-                  onChange={handleConcurrencyChange}
-                  className="w-16 p-1 border border-gray-600 rounded bg-gray-700 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                />
-              </div>
-              <button className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 transition text-gray-200">Project Settings</button>
-            </div>
+            )}
           </div>
         </div>
         
         <div className="w-1/4 border-l border-gray-700 bg-gray-800 overflow-auto">
           <div className="p-2">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="font-semibold text-gray-200">Tree Structure</h3>
-              <div className="text-sm text-gray-400">Completion: <span className="font-medium">[0%]</span></div>
+              <h3 className="font-semibold text-gray-200">Project Structure</h3>
+              {activeProject && (
+                <div className="text-sm text-gray-400">
+                  Completion: <span className="font-medium">{activeProject.progress}%</span>
+                </div>
+              )}
             </div>
-            <TreeView data={[]} />
+            {activeProject ? (
+              <TreeView data={[]} />
+            ) : (
+              <div className="text-gray-400 text-center p-4">
+                <p>Select a project to view its structure</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

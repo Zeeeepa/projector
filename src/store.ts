@@ -10,6 +10,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
     model: 'gpt-4',
     githubToken: '',
     aiProvider: 'Open_AI',
+    customEndpoint: '',
   },
   addProject: (project) => set((state) => ({
     projects: [...state.projects, {
@@ -26,6 +27,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
     projects: state.projects.map((p) => 
       p.id === id ? { ...p, ...updates } : p
     ),
+    activeProject: state.activeProject?.id === id ? { ...state.activeProject, ...updates } : state.activeProject
   })),
   initializeProject: (id) => set((state) => ({
     projects: state.projects.map((p) => 

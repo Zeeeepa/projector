@@ -1,13 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useChatStore, useProjectStore } from '../store';
 import { apiService } from '../services/api';
+import { Project } from '../types';
 
 export function ChatInterface() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { messages, addMessage } = useChatStore();
-  const activeProject = useProjectStore((state) => state.activeProject);
+  const { messages, addMessage, clearMessages } = useChatStore();
+  const { projects, activeProject, setActiveProject } = useProjectStore();
   const apiSettings = useProjectStore((state) => state.apiSettings);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(activeProject?.id || null);
+
+  useEffect(() => {
+    if (activeProject) {
+      setSelectedProjectId(activeProject.id);
+    }
+  }, [activeProject]);
+
+  useEffect(() => {
+    clearMessages();
+  }, [selectedProjectId, clearMessages]);
+
+  const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const projectId = e.target.value;
+    setSelectedProjectId(projectId);
+    
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      setActiveProject(project);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -16,7 +38,7 @@ export function ChatInterface() {
     addMessage({
       content: message,
       sender: 'user',
-      projectId: activeProject?.id,
+      projectId: selectedProjectId || undefined,
     });
 
     setIsLoading(true);
@@ -26,14 +48,14 @@ export function ChatInterface() {
 
       const response = await apiService.sendChatMessage(
         message,
-        activeProject?.id,
+        selectedProjectId || undefined,
         messages
       );
 
       addMessage({
         content: response.response,
         sender: 'ai',
-        projectId: activeProject?.id,
+        projectId: selectedProjectId || undefined,
       });
     } catch (error) {
       console.error('Error sending message:', error);
@@ -41,7 +63,7 @@ export function ChatInterface() {
       addMessage({
         content: `Error: ${error instanceof Error ? error.message : 'Failed to send message'}`,
         sender: 'ai',
-        projectId: activeProject?.id,
+        projectId: selectedProjectId || undefined,
       });
     } finally {
       setIsLoading(false);
@@ -49,19 +71,41 @@ export function ChatInterface() {
     }
   };
 
+  const filteredMessages = selectedProjectId 
+    ? messages.filter(msg => !msg.projectId || msg.projectId === selectedProjectId)
+    : messages;
+
   return (
     <div className="bg-gray-900 rounded-lg shadow-lg">
-      <div className="p-4 border-b border-gray-700">
+      <div className="p-4 border-b border-gray-700 flex justify-between items-center">
         <h3 className="text-lg font-medium text-gray-100">Chat Interface</h3>
+        <div className="flex items-center space-x-2">
+          <label htmlFor="projectSelect" className="text-sm text-gray-300">
+            Project:
+          </label>
+          <select
+            id="projectSelect"
+            value={selectedProjectId || ''}
+            onChange={handleProjectChange}
+            className="bg-gray-800 border border-gray-700 text-gray-100 text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 p-1.5"
+          >
+            <option value="">Global Chat</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       <div className="p-4 h-64 overflow-y-auto bg-gray-900">
         <div className="space-y-4">
-          {messages.length === 0 && (
+          {filteredMessages.length === 0 && (
             <div className="text-center text-gray-500 py-4">
               <p>No messages yet. Start a conversation!</p>
             </div>
           )}
-          {messages.map((msg) => (
+          {filteredMessages.map((msg) => (
             <div key={msg.id} className={`flex items-start ${msg.sender === 'user' ? 'justify-end' : ''}`}>
               {msg.sender === 'ai' && (
                 <div className="flex-shrink-0">
