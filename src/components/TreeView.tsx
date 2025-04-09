@@ -34,25 +34,25 @@ const TreeView: React.FC<TreeViewProps> = ({ data }) => {
     
     // Determine color based on progress
     const getProgressColor = (progress: number) => {
-      if (progress === 100) return 'text-green-600';
-      if (progress >= 50) return 'text-yellow-600';
-      if (progress > 0) return 'text-orange-500';
+      if (progress === 100) return 'text-green-500';
+      if (progress >= 50) return 'text-yellow-500';
+      if (progress > 0) return 'text-orange-400';
       return 'text-gray-500';
     };
     
     return (
       <div key={node.id} className="font-mono">
-        <div className="flex items-center py-1 hover:bg-gray-50">
+        <div className="flex items-center py-1 hover:bg-gray-700">
           {level > 0 && (
-            <span className="text-gray-500">
+            <span className="text-gray-400">
               {getPrefix(0, 1, level)}
             </span>
           )}
-          <span className="font-medium">{node.name}</span>
+          <span className="font-medium text-gray-200">{node.name}</span>
           {node.progress !== undefined && (
             <span className={`ml-2 ${getProgressColor(node.progress)}`}>[{node.progress}%]</span>
           )}
-          <span className={`ml-2 ${isCompleted ? 'text-green-600' : 'text-gray-500'}`}>
+          <span className={`ml-2 ${isCompleted ? 'text-green-500' : 'text-gray-500'}`}>
             {isCompleted ? '[\u2713]' : '[ ]'}
           </span>
         </div>
@@ -61,7 +61,7 @@ const TreeView: React.FC<TreeViewProps> = ({ data }) => {
           <div className="ml-4">
             {node.children!.map((child, index) => (
               <div key={child.id} className="flex">
-                <div className="text-gray-500 mr-1">
+                <div className="text-gray-400 mr-1">
                   {getChildPrefix(index, node.children!.length)}
                 </div>
                 <div className="flex-1">
@@ -76,22 +76,22 @@ const TreeView: React.FC<TreeViewProps> = ({ data }) => {
   };
 
   return (
-    <div className="border rounded-lg overflow-auto bg-white shadow-sm">
-      <div className="flex space-x-4 mb-2 border-b p-2">
+    <div className="border border-gray-700 rounded-lg overflow-auto bg-gray-800 shadow-md">
+      <div className="flex space-x-4 mb-2 border-b border-gray-700 p-2">
         <button 
-          className={`font-medium ${activeTab === 'structure' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`font-medium ${activeTab === 'structure' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200'}`}
           onClick={() => setActiveTab('structure')}
         >
           Tree Structure
         </button>
         <button 
-          className={`font-medium ${activeTab === 'component' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`font-medium ${activeTab === 'component' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200'}`}
           onClick={() => setActiveTab('component')}
         >
           Component Integration
         </button>
         <button 
-          className={`font-medium ${activeTab === 'completion' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`font-medium ${activeTab === 'completion' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200'}`}
           onClick={() => setActiveTab('completion')}
         >
           Completion
