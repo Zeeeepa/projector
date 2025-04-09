@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import StepGuide from './StepGuide';
 import TreeView from './TreeView';
-import ChatInterface from './ChatInterface';
+import { ChatInterface } from './ChatInterface';
 
 // Sample data for demonstration
 const sampleTreeData = [
