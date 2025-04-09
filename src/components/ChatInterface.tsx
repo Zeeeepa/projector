@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useChatStore, useProjectStore } from '../store';
 import { apiService } from '../services/api';
 import { Project } from '../types';
@@ -7,9 +7,9 @@ export function ChatInterface() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { messages, addMessage, clearMessages } = useChatStore();
-  const { projects, activeProject, setActiveProject } = useProjectStore();
-  const apiSettings = useProjectStore((state) => state.apiSettings);
+  const { projects, activeProject, setActiveProject, apiSettings } = useProjectStore();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(activeProject?.id || null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (activeProject) {
@@ -20,6 +20,12 @@ export function ChatInterface() {
   useEffect(() => {
     clearMessages();
   }, [selectedProjectId, clearMessages]);
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const projectId = e.target.value;
@@ -46,8 +52,16 @@ export function ChatInterface() {
     try {
       apiService.updateSettings(apiSettings);
 
+      let contextPrompt = '';
+      if (selectedProjectId) {
+        const project = projects.find(p => p.id === selectedProjectId);
+        if (project && project.description) {
+          contextPrompt = `[Project Context: ${project.description}]\n\n`;
+        }
+      }
+
       const response = await apiService.sendChatMessage(
-        message,
+        contextPrompt + message,
         selectedProjectId || undefined,
         messages
       );
@@ -76,7 +90,7 @@ export function ChatInterface() {
     : messages;
 
   return (
-    <div className="bg-gray-900 rounded-lg shadow-lg">
+    <div className="flex flex-col h-96 bg-gray-900 rounded-lg shadow-lg">
       <div className="p-4 border-b border-gray-700 flex justify-between items-center">
         <h3 className="text-lg font-medium text-gray-100">Chat Interface</h3>
         <div className="flex items-center space-x-2">
@@ -98,11 +112,16 @@ export function ChatInterface() {
           </select>
         </div>
       </div>
-      <div className="p-4 h-64 overflow-y-auto bg-gray-900">
+      <div className="flex-1 p-4 overflow-y-auto bg-gray-900">
         <div className="space-y-4">
           {filteredMessages.length === 0 && (
             <div className="text-center text-gray-500 py-4">
               <p>No messages yet. Start a conversation!</p>
+              {selectedProjectId && (
+                <p className="mt-2 text-xs text-gray-400">
+                  Chatting about project: {projects.find(p => p.id === selectedProjectId)?.name}
+                </p>
+              )}
             </div>
           )}
           {filteredMessages.map((msg) => (
@@ -149,6 +168,7 @@ export function ChatInterface() {
               </div>
             </div>
           )}
+          <div ref={messagesEndRef} />
         </div>
       </div>
       <form onSubmit={handleSubmit} className="p-4 border-t border-gray-700">

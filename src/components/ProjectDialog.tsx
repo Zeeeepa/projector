@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useProjectStore } from '../store';
-import { apiService } from '../services/api';
 
 interface ProjectDialogProps {
   isOpen: boolean;
@@ -12,42 +11,28 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
   const [description, setDescription] = useState('');
   const [githubUrl, setGithubUrl] = useState('');
   const [slackChannel, setSlackChannel] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const { addProject, apiSettings } = useProjectStore();
+  const { addProject } = useProjectStore();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!name || !githubUrl) {
-      setError('Name and GitHub URL are required');
+    if (!name) {
+      setError('Project name is required');
       return;
     }
 
-    setIsLoading(true);
     setError(null);
 
     try {
-      // Update API settings if they've changed
-      apiService.updateSettings(apiSettings);
-
-      // Create project in the backend
-      const newProject = await apiService.createProject({
+      // Add project to the store directly without fetching anything
+      addProject({
         name,
         description,
         githubUrl,
         slackChannel,
         threads: 2 // Default value, can be changed in project tab
-      });
-
-      // Add project to the store
-      addProject({
-        name: newProject.name,
-        description: newProject.description || description,
-        githubUrl: newProject.githubUrl,
-        slackChannel: newProject.slackChannel,
-        threads: newProject.threads
       });
 
       // Reset form and close dialog
@@ -56,8 +41,6 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
     } catch (err) {
       console.error('Error creating project:', err);
       setError(err instanceof Error ? err.message : 'Failed to create project');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -94,7 +77,6 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                disabled={isLoading}
                 required
               />
             </div>
@@ -109,8 +91,10 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
                 className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                disabled={isLoading}
               />
+              <p className="mt-1 text-xs text-gray-400">
+                This will be used as the context reference for the project
+              </p>
             </div>
             
             <div>
@@ -124,8 +108,6 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 onChange={(e) => setGithubUrl(e.target.value)}
                 className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 placeholder="https://github.com/username/repo"
-                disabled={isLoading}
-                required
               />
             </div>
             
@@ -140,7 +122,6 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 onChange={(e) => setSlackChannel(e.target.value)}
                 className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 placeholder="e.g. C01234ABCDE"
-                disabled={isLoading}
               />
               <p className="mt-1 text-xs text-gray-400">
                 Find this in Slack by right-clicking on a channel and selecting "Copy Link"
@@ -156,18 +137,14 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 onClose();
               }}
               className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
-              disabled={isLoading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white ${
-                isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-              }`}
-              disabled={isLoading}
+              className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
             >
-              {isLoading ? 'Creating...' : 'Create Project'}
+              Create Project
             </button>
           </div>
         </form>
