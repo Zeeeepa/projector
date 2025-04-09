@@ -129,7 +129,9 @@ const MainLayout: React.FC = () => {
                       {activeProject.description || 'No description provided for this project.'}
                     </p>
                     <div className="mt-2">
-                      <p className="text-gray-400 text-sm">GitHub: <a href={activeProject.githubUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{activeProject.githubUrl}</a></p>
+                      {activeProject.githubUrl && (
+                        <p className="text-gray-400 text-sm">GitHub: <a href={activeProject.githubUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{activeProject.githubUrl}</a></p>
+                      )}
                       {activeProject.slackChannel && (
                         <p className="text-gray-400 text-sm">Slack Channel: {activeProject.slackChannel}</p>
                       )}
@@ -149,7 +151,6 @@ const MainLayout: React.FC = () => {
                       className="w-16 p-1 border border-gray-600 rounded bg-gray-700 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
                     />
                   </div>
-                  <button className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 transition text-gray-200">Project Settings</button>
                 </div>
               </>
             ) : (

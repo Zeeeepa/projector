@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useProjectStore } from '../store';
-import { apiService } from '../services/api';
 import { AIProvider } from '../types';
 
 interface SettingsDialogProps {
@@ -19,6 +18,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [customEndpoint, setCustomEndpoint] = useState(apiSettings.customEndpoint || '');
+  const [testMessage, setTestMessage] = useState('Hello, can you hear me?');
 
   useEffect(() => {
     setApiKey(apiSettings.apiKey);
@@ -41,13 +41,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       customEndpoint
     });
     
-    apiService.updateSettings({
-      apiKey,
-      apiBaseUrl,
-      githubToken,
-      customEndpoint
-    });
-    
     onClose();
   };
 
@@ -56,67 +49,103 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setTestResult(null);
     
     try {
-      apiService.updateSettings({
-        apiKey,
-        apiBaseUrl,
-        githubToken,
-        customEndpoint
-      });
-      
       let endpoint = apiBaseUrl;
-      
-      if (aiProvider === 'Open_AI_Compatible' && customEndpoint) {
-        endpoint = customEndpoint;
-      }
-      
-      let testUrl = `${endpoint}/api/health`;
-      let headers: HeadersInit = {};
+      let testUrl = '';
+      let headers: HeadersInit = {
+        'Content-Type': 'application/json'
+      };
       
       if (apiKey) {
         headers['Authorization'] = `Bearer ${apiKey}`;
       }
       
-      if (aiProvider === 'Open_AI_Compatible') {
-        testUrl = customEndpoint;
+      if (aiProvider === 'Open_AI' || aiProvider === 'Open_AI_Compatible') {
+        testUrl = aiProvider === 'Open_AI' 
+          ? 'https://api.openai.com/v1/chat/completions'
+          : customEndpoint;
+          
         const testBody = {
           model: model || 'gpt-3.5-turbo',
-          messages: [{ role: 'user', content: 'Hello' }],
-          max_tokens: 5
+          messages: [{ role: 'user', content: testMessage }],
+          max_tokens: 50,
+          temperature: 0.7
         };
         
         const response = await fetch(testUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
+          headers,
           body: JSON.stringify(testBody)
         });
         
         if (response.ok) {
+          const data = await response.json();
+          const aiResponse = data.choices?.[0]?.message?.content || '';
+          
           setTestResult({
             success: true,
-            message: 'Connection successful! API is responding correctly.'
+            message: `Connection successful! Response: "${aiResponse.substring(0, 100)}${aiResponse.length > 100 ? '...' : ''}"`
+          });
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error?.message || `API error: ${response.status}`);
+        }
+      } else if (aiProvider === 'Anthropic') {
+        testUrl = 'https://api.anthropic.com/v1/messages';
+        headers['anthropic-version'] = '2023-06-01';
+        
+        const testBody = {
+          model: model || 'claude-3-haiku-20240307',
+          messages: [{ role: 'user', content: testMessage }],
+          max_tokens: 50
+        };
+        
+        const response = await fetch(testUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(testBody)
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const aiResponse = data.content?.[0]?.text || '';
+          
+          setTestResult({
+            success: true,
+            message: `Connection successful! Response: "${aiResponse.substring(0, 100)}${aiResponse.length > 100 ? '...' : ''}"`
+          });
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error?.message || `API error: ${response.status}`);
+        }
+      } else if (aiProvider === 'Nvidia') {
+        testUrl = 'https://api.nvidia.com/v1/chat/completions';
+        
+        const testBody = {
+          model: model || 'llama-3-70b',
+          messages: [{ role: 'user', content: testMessage }],
+          max_tokens: 50
+        };
+        
+        const response = await fetch(testUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(testBody)
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const aiResponse = data.choices?.[0]?.message?.content || '';
+          
+          setTestResult({
+            success: true,
+            message: `Connection successful! Response: "${aiResponse.substring(0, 100)}${aiResponse.length > 100 ? '...' : ''}"`
           });
         } else {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.error?.message || `API error: ${response.status}`);
         }
       } else {
-        const response = await fetch(testUrl, {
-          method: 'GET',
-          headers
-        });
-        
-        if (response.ok) {
-          setTestResult({
-            success: true,
-            message: 'Connection successful! API is responding.'
-          });
-        } else {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.detail || `API error: ${response.status}`);
-        }
+        throw new Error('Unsupported AI provider');
       }
     } catch (err) {
       console.error('Error testing connection:', err);
@@ -264,6 +293,23 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               </select>
             </div>
             
+            <div>
+              <label htmlFor="testMessage" className="block text-sm font-medium text-gray-300">
+                Test Message
+              </label>
+              <input
+                type="text"
+                id="testMessage"
+                value={testMessage}
+                onChange={(e) => setTestMessage(e.target.value)}
+                className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                placeholder="Enter a test message for the API"
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                This message will be sent to test the API connection
+              </p>
+            </div>
+            
             {testResult && (
               <div className={`p-3 rounded-md ${testResult.success ? 'bg-green-900 text-green-100' : 'bg-red-900 text-red-100'}`}>
                 {testResult.message}
@@ -277,7 +323,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                 className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white ${
                   isTesting ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
                 }`}
-                disabled={isTesting || (!apiBaseUrl && aiProvider !== 'Open_AI_Compatible') || (aiProvider === 'Open_AI_Compatible' && !customEndpoint)}
+                disabled={isTesting || (!apiKey) || (aiProvider === 'Open_AI_Compatible' && !customEndpoint)}
               >
                 {isTesting ? 'Testing...' : 'Test Connection'}
               </button>
