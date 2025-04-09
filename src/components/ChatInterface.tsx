@@ -50,33 +50,43 @@ export function ChatInterface() {
   };
 
   return (
-    <div className="mt-6 bg-gray-800 rounded-lg shadow">
+    <div className="bg-gray-800 rounded-lg shadow-lg">
       <div className="p-4 border-b border-gray-700">
         <h3 className="text-lg font-medium text-gray-100">Chat Interface</h3>
       </div>
-      <div className="p-4 h-64 overflow-y-auto">
+      <div className="p-4 h-64 overflow-y-auto bg-gray-900">
         <div className="space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center text-gray-500 py-4">
+              <p>No messages yet. Start a conversation!</p>
+            </div>
+          )}
           {messages.map((msg) => (
             <div key={msg.id} className="flex items-start">
               <div className="flex-shrink-0">
-                <div className={`h-8 w-8 rounded-full ${msg.sender === 'ai' ? 'bg-indigo-900' : 'bg-gray-700'} flex items-center justify-center`}>
+                <div className={`h-8 w-8 rounded-full ${msg.sender === 'ai' ? 'bg-indigo-600' : 'bg-gray-600'} flex items-center justify-center`}>
                   <span className="text-sm font-medium text-gray-100">{msg.sender === 'ai' ? 'AI' : 'You'}</span>
                 </div>
               </div>
-              <div className="ml-3">
-                <p className="text-sm text-gray-300">{msg.content}</p>
+              <div className="ml-3 bg-gray-800 rounded-lg p-3 max-w-3xl">
+                <p className="text-sm text-gray-300 whitespace-pre-wrap">{msg.content}</p>
               </div>
             </div>
           ))}
           {isLoading && (
             <div className="flex items-start">
               <div className="flex-shrink-0">
-                <div className="h-8 w-8 rounded-full bg-indigo-900 flex items-center justify-center">
+                <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center">
                   <span className="text-sm font-medium text-gray-100">AI</span>
                 </div>
               </div>
-              <div className="ml-3">
-                <p className="text-sm text-gray-300">Thinking...</p>
+              <div className="ml-3 bg-gray-800 rounded-lg p-3">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse delay-100"></div>
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse delay-200"></div>
+                  <span className="text-sm text-gray-400">Thinking...</span>
+                </div>
               </div>
             </div>
           )}
