@@ -74,7 +74,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
       <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6">
         <h2 className="text-xl font-semibold text-gray-100 mb-4">Add New Project</h2>
         
@@ -95,7 +95,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 disabled={isLoading}
                 required
               />
@@ -110,7 +110,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
-                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 disabled={isLoading}
               />
             </div>
@@ -124,7 +124,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 id="githubUrl"
                 value={githubUrl}
                 onChange={(e) => setGithubUrl(e.target.value)}
-                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 placeholder="https://github.com/username/repo"
                 disabled={isLoading}
                 required
@@ -133,17 +133,20 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
             
             <div>
               <label htmlFor="slackChannel" className="block text-sm font-medium text-gray-300">
-                Slack Channel
+                Slack Channel ID
               </label>
               <input
                 type="text"
                 id="slackChannel"
                 value={slackChannel}
                 onChange={(e) => setSlackChannel(e.target.value)}
-                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                placeholder="e.g. #project-updates"
+                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                placeholder="e.g. C01234ABCDE"
                 disabled={isLoading}
               />
+              <p className="mt-1 text-xs text-gray-400">
+                Find this in Slack by right-clicking on a channel and selecting "Copy Link"
+              </p>
             </div>
             
             <div>
@@ -157,10 +160,10 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 max="10"
                 value={threads}
                 onChange={(e) => setThreads(parseInt(e.target.value))}
-                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 disabled={isLoading}
               />
-              <p className="mt-1 text-sm text-gray-400">
+              <p className="mt-1 text-xs text-gray-400">
                 Number of concurrent tasks (1-10)
               </p>
             </div>
@@ -181,7 +184,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
             <button
               type="submit"
               className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white ${
-                isLoading ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+                isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
               }`}
               disabled={isLoading}
             >
