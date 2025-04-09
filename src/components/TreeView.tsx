@@ -90,12 +90,6 @@ const TreeView: React.FC<TreeViewProps> = ({ data }) => {
         >
           Component Integration
         </button>
-        <button 
-          className={`font-medium ${activeTab === 'completion' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200'}`}
-          onClick={() => setActiveTab('completion')}
-        >
-          Completion
-        </button>
       </div>
       
       <div className="p-2 space-y-1">
