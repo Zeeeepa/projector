@@ -12,9 +12,11 @@ function Log-Message {
 
 # Check if Python is installed
 $pythonVersion = $null
+$pythonCmd = $null
 try {
     $pythonVersion = python --version
     Log-Message "Python detected: $pythonVersion"
+    $pythonCmd = "python"
 } catch {
     try {
         $pythonVersion = python3 --version
@@ -26,10 +28,6 @@ try {
     }
 }
 
-if (-not $pythonCmd) {
-    $pythonCmd = "python"
-}
-
 # Set up virtual environment
 $VENV_NAME = "projector-env"
 Log-Message "Creating virtual environment: $VENV_NAME"
@@ -39,10 +37,22 @@ Log-Message "Creating virtual environment: $VENV_NAME"
 
 # Activate virtual environment based on OS
 Log-Message "Activating virtual environment..."
-if ($IsWindows) {
-    & "./$VENV_NAME/Scripts/Activate.ps1"
+if ($IsWindows -or $env:OS -match "Windows") {
+    $activateScript = Join-Path -Path $VENV_NAME -ChildPath "Scripts\Activate.ps1"
+    if (Test-Path $activateScript) {
+        & $activateScript
+    } else {
+        Log-Message "WARNING: Could not find activation script at $activateScript"
+        Log-Message "Continuing with system Python installation..."
+    }
 } else {
-    & "./$VENV_NAME/bin/Activate.ps1"
+    $activateScript = Join-Path -Path $VENV_NAME -ChildPath "bin/activate.ps1"
+    if (Test-Path $activateScript) {
+        & $activateScript
+    } else {
+        Log-Message "WARNING: Could not find activation script at $activateScript"
+        Log-Message "Continuing with system Python installation..."
+    }
 }
 
 # Install required packages
@@ -62,7 +72,7 @@ DATABASE_URL=sqlite:///./app.db
 SECRET_KEY=your-secret-key-here
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173
 "@ | Out-File -FilePath "./.env" -Encoding utf8
     Log-Message "Created sample .env file. Please update with your actual configuration."
 }
@@ -281,6 +291,14 @@ def create_task(feature_id: int, task: TaskCreate, db: Session = Depends(get_db)
     db.refresh(db_task)
     return db_task
 "@ | Out-File -FilePath "./api/main.py" -Encoding utf8
+}
+
+# Create __init__.py file to make the api directory a proper Python package
+if (-not (Test-Path -Path "./api/__init__.py")) {
+    @"
+# API package initialization
+"@ | Out-File -FilePath "./api/__init__.py" -Encoding utf8
+    Log-Message "Created ./api/__init__.py file."
 }
 
 # Start the backend server

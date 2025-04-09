@@ -47,10 +47,12 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Deploy the frontend (this would typically involve copying files to a server or deploying to a hosting service)
+# Success message with clear instructions
 Log-Message "Frontend built successfully!"
 Log-Message "To start the development server, run: npm run dev"
-Log-Message "To preview the production build, run: npm run preview"
+Log-Message "To preview the production build, run: npm run preview or npm run start"
+Log-Message "  - Development server (npm run dev): http://localhost:5173"
+Log-Message "  - Production preview (npm run preview/start): http://localhost:4173"
 
 # Success message
 Log-Message "Frontend deployment completed successfully!"
