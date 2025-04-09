@@ -43,10 +43,22 @@ if (-not (Test-Path -Path $VENV_NAME)) {
 
 # Activate virtual environment
 Write-Log "Activating virtual environment..."
-if ($IsWindows) {
-    & "./$VENV_NAME/Scripts/Activate.ps1"
+if ($IsWindows -or $env:OS -match "Windows") {
+    # Windows path
+    $activateScript = "./$VENV_NAME/Scripts/Activate.ps1"
+    if (Test-Path -Path $activateScript) {
+        & $activateScript
+    } else {
+        Write-Log "WARNING: Activation script not found at $activateScript. Continuing without activation."
+    }
 } else {
-    & "./$VENV_NAME/bin/Activate.ps1"
+    # Unix path
+    $activateScript = "./$VENV_NAME/bin/Activate.ps1"
+    if (Test-Path -Path $activateScript) {
+        & $activateScript
+    } else {
+        Write-Log "WARNING: Activation script not found at $activateScript. Continuing without activation."
+    }
 }
 
 # Install or update dependencies
@@ -93,7 +105,7 @@ SLACK_SIGNING_SECRET=your_slack_signing_secret
 # AI Configuration
 OPENAI_API_KEY=your_openai_api_key
 AI_MODEL=gpt-4
-"@ | Out-File -FilePath $ENV_FILE
+"@ | Out-File -FilePath $ENV_FILE -Encoding utf8
     Write-Log "Created sample .env file. Please update with your actual configuration."
 }
 

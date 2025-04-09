@@ -53,7 +53,7 @@ if (-not (Test-Path -Path $ENV_FILE)) {
 VITE_API_URL=http://localhost:8000
 VITE_APP_TITLE=Projector
 VITE_DEFAULT_MODEL=gpt-4
-"@ | Out-File -FilePath $ENV_FILE
+"@ | Out-File -FilePath $ENV_FILE -Encoding utf8
     Write-Log "Created sample .env file. Please update with your actual configuration."
 }
 
@@ -71,18 +71,20 @@ if (-not (Test-Path -Path $DIST_DIR)) {
     exit 1
 }
 
-# Serve the frontend for testing
+# Serve the frontend for development
 Write-Log "Starting development server..."
-$serverProcess = Start-Process -FilePath "npm" -ArgumentList "run dev" -PassThru -NoNewWindow
-
-Write-Log "Frontend development server started with PID: $($serverProcess.Id)"
-Write-Log "Frontend is now available at http://localhost:5173"
-Write-Log "To stop the server, press Ctrl+C or kill process $($serverProcess.Id)"
-
-# Keep the script running until manually terminated
 try {
-    Wait-Process -Id $serverProcess.Id
+    # Use direct command instead of Start-Process to avoid issues
+    Write-Log "Running npm run dev command..."
+    Write-Log "Frontend is now available at http://localhost:5173"
+    Write-Log "To stop the server, press Ctrl+C"
+    
+    # Run npm directly
+    npm run dev
 } catch {
+    Write-Log "ERROR: Failed to start development server: $_"
+    exit 1
+} finally {
     Write-Log "Frontend server process terminated."
 }
 
