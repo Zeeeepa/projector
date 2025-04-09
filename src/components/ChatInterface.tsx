@@ -54,7 +54,7 @@ export function ChatInterface() {
       <div className="p-4 border-b border-gray-700">
         <h3 className="text-lg font-medium text-gray-100">Chat Interface</h3>
       </div>
-      <div className="p-4 h-64 overflow-y-auto bg-gray-800">
+      <div className="p-4 h-64 overflow-y-auto bg-gray-900">
         <div className="space-y-4">
           {messages.length === 0 && (
             <div className="text-center text-gray-500 py-4">
@@ -62,29 +62,44 @@ export function ChatInterface() {
             </div>
           )}
           {messages.map((msg) => (
-            <div key={msg.id} className="flex items-start">
-              <div className="flex-shrink-0">
-                <div className={`h-8 w-8 rounded-full ${msg.sender === 'ai' ? 'bg-blue-600' : 'bg-gray-600'} flex items-center justify-center`}>
-                  <span className="text-sm font-medium text-gray-100">{msg.sender === 'ai' ? 'AI' : 'You'}</span>
+            <div key={msg.id} className={`flex items-start ${msg.sender === 'user' ? 'justify-end' : ''}`}>
+              {msg.sender === 'ai' && (
+                <div className="flex-shrink-0">
+                  <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center">
+                    <span className="text-sm font-medium text-gray-100">AI</span>
+                  </div>
                 </div>
+              )}
+              <div 
+                className={`mx-2 rounded-lg p-3 max-w-3xl ${
+                  msg.sender === 'ai' 
+                    ? 'bg-gray-800 border border-gray-700 text-gray-200' 
+                    : 'bg-blue-600 text-white'
+                }`}
+              >
+                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
               </div>
-              <div className={`ml-3 rounded-lg p-3 max-w-3xl ${msg.sender === 'ai' ? 'bg-gray-700' : 'bg-blue-600'}`}>
-                <p className="text-sm text-gray-200 whitespace-pre-wrap">{msg.content}</p>
-              </div>
+              {msg.sender === 'user' && (
+                <div className="flex-shrink-0">
+                  <div className="h-8 w-8 rounded-full bg-gray-700 flex items-center justify-center">
+                    <span className="text-sm font-medium text-gray-100">You</span>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           {isLoading && (
             <div className="flex items-start">
               <div className="flex-shrink-0">
-                <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center">
+                <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center">
                   <span className="text-sm font-medium text-gray-100">AI</span>
                 </div>
               </div>
-              <div className="ml-3 bg-gray-700 rounded-lg p-3">
+              <div className="ml-3 bg-gray-800 border border-gray-700 rounded-lg p-3">
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse delay-100"></div>
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse delay-200"></div>
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse delay-100"></div>
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse delay-200"></div>
                   <span className="text-sm text-gray-400">Thinking...</span>
                 </div>
               </div>
@@ -99,13 +114,13 @@ export function ChatInterface() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Type your message..."
-            className="flex-1 rounded-md bg-gray-700 border-gray-600 text-gray-100 px-4 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+            className="flex-1 rounded-md bg-gray-800 border-gray-700 text-gray-100 px-4 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
             disabled={isLoading}
           />
           <button
             type="submit"
             className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
-              isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+              isLoading ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
             }`}
             disabled={isLoading}
           >

@@ -9,10 +9,12 @@ const DEFAULT_API_URL = 'http://localhost:8000';
 export class ApiService {
   private apiBaseUrl: string;
   private apiKey: string | null;
+  private githubToken: string | null;
 
   constructor(settings?: APISettings) {
     this.apiBaseUrl = settings?.apiBaseUrl || DEFAULT_API_URL;
     this.apiKey = settings?.apiKey || null;
+    this.githubToken = settings?.githubToken || null;
   }
 
   /**
@@ -24,6 +26,9 @@ export class ApiService {
     }
     if (settings.apiKey) {
       this.apiKey = settings.apiKey;
+    }
+    if (settings.githubToken) {
+      this.githubToken = settings.githubToken;
     }
   }
 
@@ -37,6 +42,10 @@ export class ApiService {
 
     if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    
+    if (this.githubToken) {
+      headers['X-GitHub-Token'] = this.githubToken;
     }
 
     return headers;
@@ -180,6 +189,9 @@ export class ApiService {
     const headers: HeadersInit = {};
     if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    if (this.githubToken) {
+      headers['X-GitHub-Token'] = this.githubToken;
     }
 
     const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}/documents`, {

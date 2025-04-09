@@ -42,4 +42,8 @@ export interface APISettings {
   apiKey: string;
   apiBaseUrl: string;
   model: string;
+  githubToken: string;
+  aiProvider: 'Open_AI' | 'Anthropic' | 'Open_AI_Compatible' | 'Nvidia';
 }
+
+export type AIProvider = 'Open_AI' | 'Anthropic' | 'Open_AI_Compatible' | 'Nvidia';

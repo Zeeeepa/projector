@@ -8,6 +8,8 @@ export const useProjectStore = create<ProjectStore>((set) => ({
     apiKey: '',
     apiBaseUrl: '',
     model: 'gpt-4',
+    githubToken: '',
+    aiProvider: 'Open_AI',
   },
   addProject: (project) => set((state) => ({
     projects: [...state.projects, {
