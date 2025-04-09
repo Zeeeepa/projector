@@ -27,7 +27,7 @@ const StepGuide: React.FC<StepGuideProps> = ({
         <h2 className="text-lg font-semibold mb-2 text-gray-100">Step by step Structure View generated from user's Docs</h2>
       </div>
       
-      <div className="flex-1 overflow-auto p-4 border-b border-gray-700">
+      <div className="flex-1 overflow-auto p-4">
         <h3 className="text-lg font-semibold mb-4 text-gray-200">Generated Plan:</h3>
         {steps && steps.length > 0 ? (
           <div className="space-y-6">
@@ -58,24 +58,6 @@ const StepGuide: React.FC<StepGuideProps> = ({
             No plan generated yet. Add requirements and generate a plan to see steps here.
           </div>
         )}
-      </div>
-      
-      <div className="p-4 bg-gray-900 flex justify-end space-x-4">
-        <button
-          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition shadow-sm"
-        >
-          Generate Code Stubs
-        </button>
-        <button
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition shadow-sm"
-        >
-          Add to Project
-        </button>
-        <button
-          className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition shadow-sm"
-        >
-          Export Plan
-        </button>
       </div>
     </div>
   );

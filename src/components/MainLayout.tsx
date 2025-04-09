@@ -187,14 +187,7 @@ const MainLayout: React.FC = () => {
         
         <div className="w-1/4 border-l border-gray-700 bg-gray-800 overflow-auto">
           <div className="p-2">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-semibold text-gray-200">Project Structure</h3>
-              {activeProject && (
-                <div className="text-sm text-gray-400">
-                  Completion: <span className="font-medium">{activeProject.progress}%</span>
-                </div>
-              )}
-            </div>
+            <h3 className="font-semibold text-gray-200 p-2">Project Structure</h3>
             {activeProject ? (
               <TreeView data={[]} />
             ) : (

@@ -55,8 +55,24 @@ export function ChatInterface() {
       let contextPrompt = '';
       if (selectedProjectId) {
         const project = projects.find(p => p.id === selectedProjectId);
-        if (project && project.description) {
-          contextPrompt = `[Project Context: ${project.description}]\n\n`;
+        if (project) {
+          contextPrompt = `[Project Context: ${project.name}]\n\n`;
+          
+          if (project.description) {
+            contextPrompt += `Description: ${project.description}\n\n`;
+          }
+          
+          if (project.githubUrl) {
+            contextPrompt += `GitHub URL: ${project.githubUrl}\n\n`;
+          }
+          
+          if (project.documentation && project.documentation.length > 0) {
+            contextPrompt += `Project Requirements:\n${project.documentation.join('\n\n')}\n\n`;
+          }
+          
+          if (project.initialized) {
+            contextPrompt += `The project has a generated plan. You can modify this plan or the project structure based on user requests.\n\n`;
+          }
         }
       }
 
