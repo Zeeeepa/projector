@@ -11,6 +11,15 @@ export interface Project {
   documentation: string[];  // Changed to array of documents
 }
 
+export interface GitHubRepository {
+  id: string;
+  name: string;
+  full_name: string;
+  private: boolean;
+  url: string;
+  owner: string;
+}
+
 export interface ChatMessage {
   id: string;
   content: string;
@@ -35,6 +44,7 @@ export interface ProjectStore {
   apiSettings: APISettings;
   aiConfigs: AIConfig[];
   activeAIConfigId: string | null;
+  githubRepositories: GitHubRepository[];
   addProject: (project: Omit<Project, 'id' | 'created_at' | 'initialized' | 'progress' | 'documentation'>) => void;
   setActiveProject: (project: Project) => void;
   updateProject: (id: string, updates: Partial<Project>) => void;
@@ -46,6 +56,7 @@ export interface ProjectStore {
   setActiveAIConfig: (id: string | null) => void;
   addDocument: (projectId: string, document: string) => void;
   removeDocument: (projectId: string, document: string) => void;
+  setGithubRepositories: (repositories: GitHubRepository[]) => void;
 }
 
 export interface ChatStore {
