@@ -1,4 +1,4 @@
-import { Project, ChatMessage, APISettings, AIConfig } from '../types';
+import { Project, ChatMessage, APISettings, AIConfig, SlackConfig } from '../types';
 
 // Default API URL - can be overridden in settings
 const DEFAULT_API_URL = 'http://localhost:8000';
@@ -14,6 +14,7 @@ export class ApiService {
   private aiProvider: string | null;
   private model: string | null;
   private activeConfig: AIConfig | null = null;
+  private activeSlackConfig: SlackConfig | null = null;
 
   constructor(settings?: APISettings) {
     this.apiBaseUrl = settings?.apiBaseUrl || DEFAULT_API_URL;
@@ -59,6 +60,12 @@ export class ApiService {
       this.model = config.model;
       this.customEndpoint = config.customEndpoint || null;
     }
+  }
+  /**
+   * Set active Slack configuration
+   */
+  setActiveSlackConfig(config: SlackConfig | null): void {
+    this.activeSlackConfig = config;
   }
 
   /**
@@ -237,6 +244,100 @@ export class ApiService {
   }
 
   /**
+   * Test Slack configuration connection
+   */
+  async testSlackConfig(config: Partial<SlackConfig>, testMessage: string = 'Test message from Projector'): Promise<{ success: boolean; message: string }> {
+    try {
+      const { token, defaultChannel, sendAsUser } = config;
+      
+      if (!token) {
+        throw new Error('Slack token is required');
+      }
+      
+      if (!defaultChannel) {
+        throw new Error('Default channel is required');
+      }
+      
+      const response = await fetch(`${this.apiBaseUrl}/api/slack/test`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          token,
+          channel: defaultChannel,
+          message: testMessage,
+          as_user: sendAsUser
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          success: true,
+          message: `Message sent successfully to ${defaultChannel}`
+        };
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.error?.message || `API error: ${response.status}`);
+      }
+    } catch (err) {
+      console.error('Error testing Slack connection:', err);
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Failed to connect to Slack'
+      };
+    }
+  }
+  /**
+   * Send a message to Slack
+   */
+  async sendSlackMessage(channel: string, message: string, threadTs?: string): Promise<{ success: boolean; ts?: string; error?: string }> {
+    try {
+      if (!this.activeSlackConfig && !channel) {
+        throw new Error('No active Slack configuration or channel specified');
+      }
+      
+      const slackToken = this.activeSlackConfig?.token;
+      const useChannel = channel || this.activeSlackConfig?.defaultChannel;
+      const sendAsUser = this.activeSlackConfig?.sendAsUser || false;
+      
+      if (!slackToken) {
+        throw new Error('Slack token is required');
+      }
+      
+      if (!useChannel) {
+        throw new Error('Channel is required');
+      }
+      
+      const response = await fetch(`${this.apiBaseUrl}/api/slack/send`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          token: slackToken,
+          channel: useChannel,
+          message,
+          thread_ts: threadTs,
+          as_user: sendAsUser
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          success: true,
+          ts: data.ts
+        };
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.error?.message || `API error: ${response.status}`);
+      }
+    } catch (err) {
+      console.error('Error sending Slack message:', err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to send message to Slack'
+      };
+    }
+  /**
    * Generate a project plan based on requirements
    */
   async generateProjectPlan(projectId: string, context: string): Promise<{ success: boolean; error?: string }> {
@@ -340,9 +441,16 @@ Be specific, practical, and focus on creating a realistic implementation plan.
           
           const data = await this.handleResponse<any>(response);
           aiResponse = data.choices?.[0]?.message?.content || 'No response from AI';
-        } else {
-          throw new Error(`Unsupported AI provider: ${aiProvider}`);
-        }
+        const planMatch = aiResponse.match(/IMPLEMENTATION_PLAN:([\s\S]*?)(?=PROJECT_STRUCTURE:|$)/i);
+        const structureMatch = aiResponse.match(/PROJECT_STRUCTURE:([\s\S]*?)(?=$)/i);
+        
+        const plan = planMatch ? planMatch[1].trim() : '';
+        const structure = structureMatch ? structureMatch[1].trim() : '';
+        
+        // Save the plan to the project
+        await this.savePlanToBackend(projectId, aiResponse);
+        
+        return { success: true };
       }
       
       // Otherwise use the backend API
