@@ -1,9 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useProjectStore } from '../store';
+import { apiService } from '../services/api';
 
 interface ProjectDialogProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+interface GithubRepo {
+  id: string;
+  name: string;
+  full_name: string;
+  url: string;
 }
 
 export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
@@ -12,8 +20,45 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
   const [githubUrl, setGithubUrl] = useState('');
   const [slackChannel, setSlackChannel] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [githubRepos, setGithubRepos] = useState<GithubRepo[]>([]);
+  const [selectedRepo, setSelectedRepo] = useState<string>('');
   
-  const { addProject } = useProjectStore();
+  const { addProject, apiSettings } = useProjectStore();
+
+  useEffect(() => {
+    if (isOpen && apiSettings.githubToken) {
+      fetchGithubRepos();
+    }
+  }, [isOpen, apiSettings.githubToken]);
+
+  const fetchGithubRepos = async () => {
+    try {
+      setLoading(true);
+      const repos = await apiService.getGithubRepositories();
+      setGithubRepos(repos);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching GitHub repositories:', error);
+      setError('Failed to fetch GitHub repositories. Please check your GitHub token in settings.');
+      setLoading(false);
+    }
+  };
+
+  const handleRepoSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const repoId = e.target.value;
+    setSelectedRepo(repoId);
+    
+    if (repoId) {
+      const repo = githubRepos.find(r => r.id === repoId);
+      if (repo) {
+        setGithubUrl(repo.url);
+        if (!name) {
+          setName(repo.name);
+        }
+      }
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +71,6 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
     setError(null);
 
     try {
-      // Add project to the store directly without fetching anything
       addProject({
         name,
         description,
@@ -35,7 +79,6 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
         threads: 2 // Default value, can be changed in project tab
       });
 
-      // Reset form and close dialog
       resetForm();
       onClose();
     } catch (err) {
@@ -49,6 +92,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
     setDescription('');
     setGithubUrl('');
     setSlackChannel('');
+    setSelectedRepo('');
     setError(null);
   };
 
@@ -98,6 +142,37 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
             </div>
             
             <div>
+              <label htmlFor="githubRepo" className="block text-sm font-medium text-gray-300">
+                GitHub Repository
+              </label>
+              {loading ? (
+                <div className="mt-1 text-gray-400">Loading repositories...</div>
+              ) : githubRepos.length > 0 ? (
+                <select
+                  id="githubRepo"
+                  value={selectedRepo}
+                  onChange={handleRepoSelect}
+                  className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                  <option value="">Select a repository</option>
+                  {githubRepos.map(repo => (
+                    <option key={repo.id} value={repo.id}>
+                      {repo.full_name}
+                    </option>
+                  ))}
+                </select>
+              ) : apiSettings.githubToken ? (
+                <div className="mt-1 text-yellow-400">
+                  No repositories found. Make sure your GitHub token has the correct permissions.
+                </div>
+              ) : (
+                <div className="mt-1 text-yellow-400">
+                  Add a GitHub token in Settings to see your repositories.
+                </div>
+              )}
+            </div>
+            
+            <div>
               <label htmlFor="githubUrl" className="block text-sm font-medium text-gray-300">
                 GitHub URL
               </label>
@@ -109,6 +184,9 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 placeholder="https://github.com/username/repo"
               />
+              <p className="mt-1 text-xs text-gray-400">
+                You can manually enter a URL or select from your repositories above
+              </p>
             </div>
             
             <div>

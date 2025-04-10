@@ -617,6 +617,42 @@ Be specific, practical, and focus on creating a realistic implementation plan.
       };
     }
   }
+
+  /**
+   * Get GitHub repositories for the authenticated user
+   */
+  async getGithubRepositories(): Promise<{ id: string, name: string, full_name: string, url: string }[]> {
+    try {
+      if (!this.githubToken) {
+        throw new Error('GitHub token is required');
+      }
+      
+      const response = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'Authorization': `Bearer ${this.githubToken}`,
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `GitHub API error: ${response.status}`);
+      }
+      
+      const repos = await response.json();
+      return repos.map((repo: any) => ({
+        id: repo.id.toString(),
+        name: repo.name,
+        full_name: repo.full_name,
+        url: repo.html_url
+      }));
+    } catch (error) {
+      console.error('Error fetching GitHub repositories:', error);
+      throw error;
+    }
+  }
 }
 
 // Create a singleton instance
