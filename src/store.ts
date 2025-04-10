@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Project, ProjectStore, ChatStore, ChatMessage, APISettings, AIConfig } from './types';
+import { Project, ProjectStore, ChatStore, ChatMessage, APISettings, AIConfig, GitHubRepository } from './types';
 
 export const useProjectStore = create<ProjectStore>()(
   persist(
@@ -17,6 +17,7 @@ export const useProjectStore = create<ProjectStore>()(
       },
       aiConfigs: [],
       activeAIConfigId: null,
+      githubRepositories: [],
       addProject: (project) => set((state) => ({
         projects: [...state.projects, {
           ...project,
@@ -81,6 +82,7 @@ export const useProjectStore = create<ProjectStore>()(
             : p
         ),
       })),
+      setGithubRepositories: (repositories) => set({ githubRepositories: repositories }),
     }),
     {
       name: 'projector-storage',

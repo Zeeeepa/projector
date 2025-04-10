@@ -617,6 +617,117 @@ Be specific, practical, and focus on creating a realistic implementation plan.
       };
     }
   }
+
+  /**
+   * Fetch GitHub repositories for the authenticated user
+   */
+  async fetchGitHubRepositories(): Promise<GitHubRepository[]> {
+    if (!this.githubToken) {
+      throw new Error('GitHub token is required to fetch repositories');
+    }
+
+    try {
+      // First try the GitHub API directly
+      const response = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'Authorization': `Bearer ${this.githubToken}`,
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`GitHub API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      return data.map((repo: any) => ({
+        id: repo.id.toString(),
+        name: repo.name,
+        full_name: repo.full_name,
+        private: repo.private,
+        url: repo.html_url,
+        owner: repo.owner.login
+      }));
+    } catch (error) {
+      console.error('Error fetching GitHub repositories:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch GitHub repositories');
+    }
+  }
+
+  /**
+   * Fetch markdown files from a GitHub repository
+   */
+  async fetchGitHubMarkdownFiles(repoFullName: string): Promise<string[]> {
+    if (!this.githubToken) {
+      throw new Error('GitHub token is required to fetch repository files');
+    }
+
+    try {
+      // Get the repository contents
+      const response = await fetch(`https://api.github.com/repos/${repoFullName}/contents`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'Authorization': `Bearer ${this.githubToken}`,
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`GitHub API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Filter for markdown files
+      const markdownFiles = data
+        .filter((file: any) => file.type === 'file' && file.name.toLowerCase().endsWith('.md'))
+        .map((file: any) => file.name);
+      
+      return markdownFiles;
+    } catch (error) {
+      console.error('Error fetching GitHub repository files:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch repository files');
+    }
+  }
+
+  /**
+   * Fetch content of a markdown file from a GitHub repository
+   */
+  async fetchGitHubFileContent(repoFullName: string, filePath: string): Promise<string> {
+    if (!this.githubToken) {
+      throw new Error('GitHub token is required to fetch file content');
+    }
+
+    try {
+      // Get the file content
+      const response = await fetch(`https://api.github.com/repos/${repoFullName}/contents/${filePath}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'Authorization': `Bearer ${this.githubToken}`,
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`GitHub API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // GitHub API returns content as base64 encoded
+      const content = atob(data.content);
+      
+      return content;
+    } catch (error) {
+      console.error('Error fetching GitHub file content:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch file content');
+    }
+  }
 }
 
 // Create a singleton instance
