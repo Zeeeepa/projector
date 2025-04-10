@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Project, ProjectStore, ChatStore, ChatMessage, APISettings, AIConfig } from './types';
-
+import { Project, ProjectStore, ChatStore, ChatMessage, APISettings, AIConfig, SlackConfig } from './types';
 export const useProjectStore = create<ProjectStore>()(
   persist(
     (set) => ({
@@ -17,6 +17,8 @@ export const useProjectStore = create<ProjectStore>()(
       },
       aiConfigs: [],
       activeAIConfigId: null,
+      slackConfigs: [],
+      activeSlackConfigId: null,
       addProject: (project) => set((state) => ({
         projects: [...state.projects, {
           ...project,
@@ -67,6 +69,31 @@ export const useProjectStore = create<ProjectStore>()(
         };
       }),
       setActiveAIConfig: (id) => set({ activeAIConfigId: id }),
+      addSlackConfig: (config) => set((state) => {
+        const newConfig: SlackConfig = {
+          ...config,
+          id: crypto.randomUUID(),
+        };
+        return {
+          slackConfigs: [...state.slackConfigs, newConfig],
+          activeSlackConfigId: state.slackConfigs.length === 0 ? newConfig.id : state.activeSlackConfigId
+        };
+      }),
+      updateSlackConfig: (id, updates) => set((state) => ({
+        slackConfigs: state.slackConfigs.map((config) => 
+          config.id === id ? { ...config, ...updates } : config
+        )
+      })),
+      deleteSlackConfig: (id) => set((state) => {
+        const newConfigs = state.slackConfigs.filter((config) => config.id !== id);
+        return {
+          slackConfigs: newConfigs,
+          activeSlackConfigId: state.activeSlackConfigId === id 
+            ? (newConfigs.length > 0 ? newConfigs[0].id : null) 
+            : state.activeSlackConfigId
+        };
+      }),
+      setActiveSlackConfig: (id) => set({ activeSlackConfigId: id }),
       addDocument: (projectId, document) => set((state) => ({
         projects: state.projects.map((p) => 
           p.id === projectId 
