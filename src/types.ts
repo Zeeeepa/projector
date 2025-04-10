@@ -29,21 +29,32 @@ export interface AIConfig {
   isVerified?: boolean;
 }
 
+export interface SlackConfig {
+  id: string;
+  name: string;
+  token: string;
+  defaultChannel: string;
+  sendAsUser: boolean;
+  isVerified?: boolean;
+}
 export interface ProjectStore {
   projects: Project[];
   activeProject: Project | null;
   apiSettings: APISettings;
   aiConfigs: AIConfig[];
   activeAIConfigId: string | null;
+  slackConfigs: SlackConfig[];
+  activeSlackConfigId: string | null;
   addProject: (project: Omit<Project, 'id' | 'created_at' | 'initialized' | 'progress' | 'documentation'>) => void;
   setActiveProject: (project: Project) => void;
   updateProject: (id: string, updates: Partial<Project>) => void;
-  initializeProject: (id: string) => void;
-  updateAPISettings: (settings: Partial<APISettings>) => void;
-  addAIConfig: (config: Omit<AIConfig, 'id'>) => void;
   updateAIConfig: (id: string, updates: Partial<AIConfig>) => void;
   deleteAIConfig: (id: string) => void;
   setActiveAIConfig: (id: string | null) => void;
+  addSlackConfig: (config: Omit<SlackConfig, 'id'>) => void;
+  updateSlackConfig: (id: string, updates: Partial<SlackConfig>) => void;
+  deleteSlackConfig: (id: string) => void;
+  setActiveSlackConfig: (id: string | null) => void;
   addDocument: (projectId: string, document: string) => void;
   removeDocument: (projectId: string, document: string) => void;
 }
