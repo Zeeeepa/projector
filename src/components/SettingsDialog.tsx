@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useProjectStore } from '../store';
 import { AIProvider, AIConfig } from '../types';
 import { apiService } from '../services/api';
+import { providerRegistry } from '../providers';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -22,13 +23,14 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   
   const [apiBaseUrl, setApiBaseUrl] = useState(apiSettings.apiBaseUrl);
   const [githubToken, setGithubToken] = useState(apiSettings.githubToken);
+  const [isValidatingGithubToken, setIsValidatingGithubToken] = useState(false);
+  const [githubTokenValid, setGithubTokenValid] = useState<boolean | null>(null);
   
   const [configName, setConfigName] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [customEndpoint, setCustomEndpoint] = useState('');
-  const [isCompatibleProvider, setIsCompatibleProvider] = useState(false);
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
   
   const [isTesting, setIsTesting] = useState(false);
@@ -36,25 +38,11 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<'ai' | 'github'>('ai');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
-  const [providerNames, setProviderNames] = useState<{ id: string; name: string }[]>([]);
+  const [providerNames, setProviderNames] = useState<{ type: AIProvider; name: string }[]>([]);
   const [isValidatingKey, setIsValidatingKey] = useState(false);
 
   useEffect(() => {
-    const fetchProviders = async () => {
-      try {
-        const providers = await apiService.getProviders();
-        setProviderNames(providers);
-      } catch (error) {
-        console.error('Error fetching providers:', error);
-        setProviderNames([
-          { id: 'openai', name: 'OpenAI' },
-          { id: 'anthropic', name: 'Anthropic' },
-          { id: 'openai_compatible', name: 'OpenAI Compatible' }
-        ]);
-      }
-    };
-    
-    fetchProviders();
+    setProviderNames(providerRegistry.getProviderNames());
   }, []);
 
   useEffect(() => {
@@ -67,7 +55,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         setModel(activeConfig.model);
         setAiProvider(activeConfig.aiProvider);
         setCustomEndpoint(activeConfig.customEndpoint || '');
-        setIsCompatibleProvider(activeConfig.isCompatibleProvider || false);
       }
     } else {
       resetConfigForm();
@@ -75,19 +62,9 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   }, [activeAIConfigId, aiConfigs]);
 
   useEffect(() => {
-    if (aiProvider !== 'openai_compatible') {
-      setIsCompatibleProvider(false);
-    }
-    
     setModel('');
     setAvailableModels([]);
   }, [aiProvider]);
-
-  useEffect(() => {
-    if (aiProvider === 'openai' && isCompatibleProvider) {
-      setAiProvider('openai_compatible');
-    }
-  }, [isCompatibleProvider]);
 
   const resetConfigForm = () => {
     setEditingConfigId(null);
@@ -96,7 +73,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setModel('');
     setAiProvider('openai');
     setCustomEndpoint('');
-    setIsCompatibleProvider(false);
     setTestResult(null);
   };
 
@@ -122,7 +98,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       return;
     }
     
-    if (needsCustomEndpoint() && !customEndpoint) {
+    if (needsCustomEndpoint(aiProvider) && !customEndpoint) {
       alert('Custom API endpoint is required for this provider');
       return;
     }
@@ -133,8 +109,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       model,
       aiProvider,
       customEndpoint: customEndpoint || undefined,
-      isVerified: testResult?.success || false,
-      isCompatibleProvider: isCompatibleProvider
+      isVerified: testResult?.success || false
     };
     
     if (editingConfigId) {
@@ -159,7 +134,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setModel(config.model);
     setAiProvider(config.aiProvider);
     setCustomEndpoint(config.customEndpoint || '');
-    setIsCompatibleProvider(config.isCompatibleProvider || false);
     setTestResult(config.isVerified ? { success: true, message: 'Configuration verified' } : null);
   };
 
@@ -180,7 +154,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       const models = await apiService.getAvailableModels(
         aiProvider,
         apiKey,
-        needsCustomEndpoint() ? customEndpoint : undefined
+        needsCustomEndpoint(aiProvider) ? customEndpoint : undefined
       );
       
       setAvailableModels(models);
@@ -192,8 +166,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     }
   };
 
-  const needsCustomEndpoint = (): boolean => {
-    return aiProvider === 'openai_compatible' || isCompatibleProvider;
+  const needsCustomEndpoint = (provider: AIProvider): boolean => {
+    return provider === 'openai_compatible' || provider === 'deepinfra' || provider === 'openrouter';
   };
 
   useEffect(() => {
@@ -205,7 +179,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         const isValid = await apiService.validateApiKey(
           aiProvider,
           apiKey,
-          needsCustomEndpoint() ? customEndpoint : undefined
+          needsCustomEndpoint(aiProvider) ? customEndpoint : undefined
         );
         
         if (isValid) {
@@ -232,7 +206,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       if (apiKey && (
         aiProvider === 'openai' || 
         aiProvider === 'anthropic' || 
-        (needsCustomEndpoint() && customEndpoint)
+        aiProvider === 'nvidia' ||
+        (needsCustomEndpoint(aiProvider) && customEndpoint)
       )) {
         validateApiKey();
       }
@@ -242,10 +217,48 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   }, [apiKey, aiProvider, customEndpoint]);
 
   useEffect(() => {
-    if (apiKey && needsCustomEndpoint() && customEndpoint) {
+    if (apiKey && needsCustomEndpoint(aiProvider) && customEndpoint) {
       fetchModels();
     }
   }, [customEndpoint]);
+
+  useEffect(() => {
+    const validateGithubToken = async () => {
+      if (!githubToken || isValidatingGithubToken) return;
+      
+      setIsValidatingGithubToken(true);
+      setGithubTokenValid(null);
+      
+      try {
+        apiService.updateSettings({ githubToken });
+        
+        await fetch('https://api.github.com/user', {
+          headers: {
+            'Accept': 'application/vnd.github+json',
+            'Authorization': `Bearer ${githubToken}`,
+            'X-GitHub-Api-Version': '2022-11-28'
+          }
+        }).then(response => {
+          setGithubTokenValid(response.ok);
+        });
+      } catch (error) {
+        console.error('Error validating GitHub token:', error);
+        setGithubTokenValid(false);
+      } finally {
+        setIsValidatingGithubToken(false);
+      }
+    };
+    
+    const timer = setTimeout(() => {
+      if (githubToken) {
+        validateGithubToken();
+      } else {
+        setGithubTokenValid(null);
+      }
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, [githubToken]);
 
   const testConnection = async () => {
     setIsTesting(true);
@@ -256,7 +269,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         apiKey,
         model,
         aiProvider,
-        customEndpoint: needsCustomEndpoint() ? customEndpoint : undefined,
+        customEndpoint: needsCustomEndpoint(aiProvider) ? customEndpoint : undefined,
         name: configName
       });
       
@@ -322,16 +335,11 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                             }`}
                           >
                             <div className="flex-1">
-                              <div className="flex items-center">
-                                <span className="font-medium text-gray-200">{config.name}</span>
+                              <div className="font-medium text-gray-200">
+                                {config.name}
                                 {config.isVerified && (
-                                  <span className="ml-2 text-green-400 text-xs bg-green-900 px-2 py-0.5 rounded-full">
-                                    Verified
-                                  </span>
-                                )}
-                                {activeAIConfigId === config.id && (
-                                  <span className="ml-2 text-blue-400 text-xs bg-blue-900 px-2 py-0.5 rounded-full">
-                                    Active
+                                  <span className="ml-2 text-xs text-green-400">
+                                    ✓ Verified
                                   </span>
                                 )}
                               </div>
@@ -348,10 +356,10 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                                     ? 'bg-blue-700 text-blue-100 cursor-default'
                                     : 'bg-blue-600 text-blue-100 hover:bg-blue-500'
                                 }`}
-                                disabled={activeAIConfigId === config.id}
                               >
                                 {activeAIConfigId === config.id ? 'Active' : 'Use'}
                               </button>
+                              
                               <button
                                 type="button"
                                 onClick={() => handleEditConfig(config)}
@@ -403,27 +411,12 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                       >
                         {providerNames.map((provider) => (
-                          <option key={provider.id} value={provider.id}>
+                          <option key={provider.type} value={provider.type}>
                             {provider.name}
                           </option>
                         ))}
                       </select>
                     </div>
-                    
-                    {aiProvider === 'openai' && (
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id="isCompatibleProvider"
-                          checked={isCompatibleProvider}
-                          onChange={(e) => setIsCompatibleProvider(e.target.checked)}
-                          className="h-4 w-4 rounded border-gray-700 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <label htmlFor="isCompatibleProvider" className="ml-2 block text-sm text-gray-300">
-                          Compatible Provider (Azure, etc.)
-                        </label>
-                      </div>
-                    )}
                     
                     <div>
                       <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300">
@@ -439,10 +432,10 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       />
                     </div>
                     
-                    {needsCustomEndpoint() && (
+                    {needsCustomEndpoint(aiProvider) && (
                       <div>
                         <label htmlFor="customEndpoint" className="block text-sm font-medium text-gray-300">
-                          Base API Endpoint
+                          Custom API Endpoint
                         </label>
                         <input
                           type="url"
@@ -500,7 +493,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white flex-1 ${
                           isTesting ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
                         }`}
-                        disabled={isTesting || (!apiKey) || (needsCustomEndpoint() && !customEndpoint) || !model}
+                        disabled={isTesting || (!apiKey) || (needsCustomEndpoint(aiProvider) && !customEndpoint)}
                       >
                         {isTesting ? 'Testing...' : 'Test Connection'}
                       </button>
@@ -542,6 +535,17 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                   className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                   placeholder="Enter your GitHub token"
                 />
+                <div className="mt-2">
+                  {isValidatingGithubToken && (
+                    <p className="text-blue-400 text-sm">Validating token...</p>
+                  )}
+                  {!isValidatingGithubToken && githubTokenValid === true && (
+                    <p className="text-green-400 text-sm">✓ Token is valid</p>
+                  )}
+                  {!isValidatingGithubToken && githubTokenValid === false && (
+                    <p className="text-red-400 text-sm">✗ Token is invalid or has insufficient permissions</p>
+                  )}
+                </div>
                 <p className="mt-1 text-xs text-gray-400">
                   Used for repository access and operations. Create a token with repo scope at 
                   <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-400 hover:text-blue-300">

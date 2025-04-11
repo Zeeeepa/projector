@@ -1,4 +1,5 @@
-import { Project, ChatMessage, APISettings, AIConfig, SlackConfig } from '../types';
+import { Project, ChatMessage, APISettings, AIConfig, SlackConfig, AIProvider } from '../types';
+import { providerRegistry } from '../providers';
 
 // Default API URL - can be overridden in settings
 const DEFAULT_API_URL = 'http://localhost:8000';
@@ -11,7 +12,7 @@ export class ApiService {
   private apiKey: string | null;
   private githubToken: string | null;
   private customEndpoint: string | null;
-  private aiProvider: string | null;
+  private aiProvider: AIProvider | null;
   private model: string | null;
   private activeConfig: AIConfig | null = null;
   private activeSlackConfig: SlackConfig | null = null;
@@ -102,417 +103,28 @@ export class ApiService {
   }
 
   /**
-   * Get all projects
+   * Get available models for a provider
    */
-  async getProjects(): Promise<Project[]> {
-    const response = await fetch(`${this.apiBaseUrl}/api/projects/`, {
-      method: 'GET',
-      headers: this.getHeaders(),
-    });
-
-    return this.handleResponse<Project[]>(response);
-  }
-
-  /**
-   * Get a project by ID
-   */
-  async getProject(id: string): Promise<Project> {
-    const response = await fetch(`${this.apiBaseUrl}/api/projects/${id}`, {
-      method: 'GET',
-      headers: this.getHeaders(),
-    });
-
-    return this.handleResponse<Project>(response);
-  }
-
-  /**
-   * Create a new project
-   */
-  async createProject(project: Omit<Project, 'id' | 'created_at' | 'initialized' | 'progress' | 'documentation'>): Promise<Project> {
-    const response = await fetch(`${this.apiBaseUrl}/api/projects/`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({
-        name: project.name,
-        git_url: project.githubUrl,
-        slack_channel: project.slackChannel,
-        max_parallel_tasks: project.threads
-      }),
-    });
-
-    const data = await this.handleResponse<any>(response);
-    
-    // Transform the backend response to match frontend Project type
-    return {
-      id: data.id,
-      name: data.name,
-      description: '',
-      githubUrl: data.git_url,
-      slackChannel: data.slack_channel,
-      threads: data.max_parallel_tasks,
-      created_at: data.created_at,
-      initialized: false,
-      progress: 0,
-      documentation: data.documents || [],
-    };
-  }
-
-  /**
-   * Update a project
-   */
-  async updateProject(id: string, updates: Partial<Project>): Promise<Project> {
-    // Transform frontend model to backend model
-    const backendUpdates: any = {};
-    
-    if (updates.name !== undefined) backendUpdates.name = updates.name;
-    if (updates.githubUrl !== undefined) backendUpdates.git_url = updates.githubUrl;
-    if (updates.slackChannel !== undefined) backendUpdates.slack_channel = updates.slackChannel;
-    if (updates.threads !== undefined) backendUpdates.max_parallel_tasks = updates.threads;
-    if (updates.documentation !== undefined) backendUpdates.documents = updates.documentation;
-    
-    const response = await fetch(`${this.apiBaseUrl}/api/projects/${id}`, {
-      method: 'PUT',
-      headers: this.getHeaders(),
-      body: JSON.stringify(backendUpdates),
-    });
-
-    const data = await this.handleResponse<any>(response);
-    
-    // Transform the backend response to match frontend Project type
-    return {
-      id: data.id,
-      name: data.name,
-      description: '',
-      githubUrl: data.git_url,
-      slackChannel: data.slack_channel,
-      threads: data.max_parallel_tasks,
-      created_at: data.created_at,
-      initialized: updates.initialized !== undefined ? updates.initialized : false,
-      progress: updates.progress !== undefined ? updates.progress : 0,
-      documentation: data.documents || [],
-    };
-  }
-
-  /**
-   * Delete a project
-   */
-  async deleteProject(id: string): Promise<void> {
-    const response = await fetch(`${this.apiBaseUrl}/api/projects/${id}`, {
-      method: 'DELETE',
-      headers: this.getHeaders(),
-    });
-
-    await this.handleResponse<{ message: string }>(response);
-  }
-
-  /**
-   * Initialize a project
-   */
-  async initializeProject(id: string): Promise<void> {
-    const response = await fetch(`${this.apiBaseUrl}/api/projects/${id}/analyze`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-    });
-
-    await this.handleResponse<any>(response);
-  }
-
-  /**
-   * Upload a document to a project
-   */
-  async uploadDocument(projectId: string, file: File, category: string = 'requirements'): Promise<string> {
-    const formData = new FormData();
-    formData.append('document', file);
-    formData.append('category', category);
-
-    const headers: HeadersInit = {};
-    if (this.apiKey) {
-      headers['Authorization'] = `Bearer ${this.apiKey}`;
-    }
-    if (this.githubToken) {
-      headers['X-GitHub-Token'] = this.githubToken;
-    }
-
-    const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}/documents`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
-
-    const data = await this.handleResponse<{ message: string }>(response);
-    return data.message;
-  }
-
-  /**
-   * Test Slack configuration connection
-   */
-  async testSlackConfig(config: Partial<SlackConfig>, testMessage: string = 'Test message from Projector'): Promise<{ success: boolean; message: string }> {
+  async getAvailableModels(aiProvider: AIProvider, apiKey: string, customEndpoint?: string): Promise<string[]> {
     try {
-      const { token, defaultChannel, sendAsUser } = config;
-      
-      if (!token) {
-        throw new Error('Slack token is required');
-      }
-      
-      if (!defaultChannel) {
-        throw new Error('Default channel is required');
-      }
-      
-      const response = await fetch(`${this.apiBaseUrl}/api/slack/test`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          token,
-          channel: defaultChannel,
-          message: testMessage,
-          as_user: sendAsUser
-        }),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        return {
-          success: true,
-          message: `Message sent successfully to ${defaultChannel}`
-        };
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || errorData.error?.message || `API error: ${response.status}`);
-      }
-    } catch (err) {
-      console.error('Error testing Slack connection:', err);
-      return {
-        success: false,
-        message: err instanceof Error ? err.message : 'Failed to connect to Slack'
-      };
-    }
-  }
-  /**
-   * Send a message to Slack
-   */
-  async sendSlackMessage(channel: string, message: string, threadTs?: string): Promise<{ success: boolean; ts?: string; error?: string }> {
-    try {
-      if (!this.activeSlackConfig && !channel) {
-        throw new Error('No active Slack configuration or channel specified');
-      }
-      
-      const slackToken = this.activeSlackConfig?.token;
-      const useChannel = channel || this.activeSlackConfig?.defaultChannel;
-      const sendAsUser = this.activeSlackConfig?.sendAsUser || false;
-      
-      if (!slackToken) {
-        throw new Error('Slack token is required');
-      }
-      
-      if (!useChannel) {
-        throw new Error('Channel is required');
-      }
-      
-      const response = await fetch(`${this.apiBaseUrl}/api/slack/send`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          token: slackToken,
-          channel: useChannel,
-          message,
-          thread_ts: threadTs,
-          as_user: sendAsUser
-        }),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        return {
-          success: true,
-          ts: data.ts
-        };
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || errorData.error?.message || `API error: ${response.status}`);
-      }
-    } catch (err) {
-      console.error('Error sending Slack message:', err);
-      return { 
-        success: false, 
-        error: err instanceof Error ? err.message : 'Failed to send Slack message'
-      };
-    }
-  }
-
-  /**
-   * Generate a project plan
-   */
-  async generatePlan(projectId: string, requirements: string): Promise<{ success: boolean; plan?: string; error?: string }> {
-    try {
-      // Use active config if available
-      const aiProvider = this.activeConfig?.aiProvider || this.aiProvider;
-      const apiKey = this.activeConfig?.apiKey || this.apiKey;
-      const model = this.activeConfig?.model || this.model;
-      
       if (!apiKey) {
         throw new Error('API key is required');
       }
       
-      if (!model) {
-        throw new Error('Model is required');
+      // Try to use the provider registry first
+      const provider = providerRegistry.getProvider(aiProvider);
+      if (provider) {
+        return await provider.getAvailableModels(apiKey, customEndpoint);
       }
       
-      // First try to use the backend API
-      try {
-        const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}/generate-plan`, {
-          method: 'POST',
-          headers: this.getHeaders(),
-          body: JSON.stringify({
-            requirements
-          }),
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          // Save the plan to the backend
-          await this.savePlanToBackend(projectId, data.plan);
-          
-          return {
-            success: true,
-            plan: data.plan
-          };
-        }
-      } catch (backendError) {
-        console.warn('Backend plan generation failed, falling back to direct API call:', backendError);
-      }
-      
-      // If backend fails, use direct API call with the active provider
-      const prompt = `You are an expert software architect and project manager. 
-      
-Your task is to create a detailed project plan based on the following requirements:
-
-${requirements}
-
-Please provide a comprehensive plan that includes:
-1. Project overview and goals
-2. System architecture
-3. Component breakdown
-4. Implementation phases
-5. Timeline estimates
-6. Potential challenges and mitigation strategies
-
-Format your response in Markdown.`;
-      
-      const messages = [{ role: 'user', content: prompt }];
-      const customEndpoint = this.activeConfig?.customEndpoint || this.customEndpoint || undefined;
-      
-      const response = await this.sendChatMessage(prompt, projectId);
-      
-      // Save the plan to the backend
-      await this.savePlanToBackend(projectId, response.response);
-      
-      return {
-        success: true,
-        plan: response.response
-      };
-    } catch (error) {
-      console.error('Error generating plan:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Failed to generate plan'
-      };
-    }
-  }
-
-  /**
-   * Save a generated plan to the backend
-   */
-  private async savePlanToBackend(projectId: string, planText: string): Promise<void> {
-    try {
-      const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}/save-plan`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          plan: planText
-        }),
-      });
-
-      await this.handleResponse<any>(response);
-    } catch (error) {
-      console.error('Error saving plan to backend:', error);
-      // We don't throw here to avoid breaking the flow if backend storage fails
-    }
-  }
-
-  /**
-   * Send a chat message and get a response
-   */
-  async sendChatMessage(message: string, projectId?: string, chatHistory?: ChatMessage[]): Promise<{ response: string, chat_history: ChatMessage[] }> {
-    // Use active config if available
-    const aiProvider = this.activeConfig?.aiProvider || this.aiProvider;
-    const apiKey = this.activeConfig?.apiKey || this.apiKey;
-    const model = this.activeConfig?.model || this.model;
-    const customEndpoint = this.activeConfig?.customEndpoint || this.customEndpoint;
-    
-    // Format the chat history for the API
-    const messages = chatHistory 
-      ? chatHistory.map(msg => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.content
-        }))
-      : [];
-    
-    // Add the new message
-    messages.push({
-      role: 'user',
-      content: message
-    });
-    
-    try {
-      // Try to use the backend API first
-      try {
-        const response = await fetch(`${this.apiBaseUrl}/api/chat/`, {
-          method: 'POST',
-          headers: this.getHeaders(),
-          body: JSON.stringify({
-            project_id: projectId,
-            message,
-            chat_history: chatHistory ? chatHistory.map(msg => ({
-              role: msg.sender === 'user' ? 'user' : 'assistant',
-              content: msg.content
-            })) : undefined,
-            provider_id: aiProvider,
-            model: model,
-            api_key: apiKey,
-            custom_endpoint: customEndpoint
-          }),
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          // Transform the backend response to match frontend ChatMessage type
-          return {
-            response: data.response,
-            chat_history: data.chat_history.map((msg: any) => ({
-              id: crypto.randomUUID(),
-              content: msg.content,
-              sender: msg.role === 'user' ? 'user' : 'ai',
-              timestamp: new Date().toISOString(),
-              projectId
-            }))
-          };
-        }
-      } catch (backendError) {
-        console.warn('Backend chat API failed, falling back to direct API call:', backendError);
-      }
-      
-      // If backend fails, use direct API call
-      const response = await fetch(`${this.apiBaseUrl}/api/models/test`, {
+      // Fall back to backend API if provider not found
+      const response = await fetch(`${this.apiBaseUrl}/api/models/available`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({
           provider_id: aiProvider,
           api_key: apiKey,
-          model: model,
-          custom_endpoint: customEndpoint,
-          messages: messages
+          custom_endpoint: customEndpoint
         }),
       });
       
@@ -522,31 +134,91 @@ Format your response in Markdown.`;
       }
       
       const data = await response.json();
-      const aiResponse = data.message || "No response from AI";
-      
-      // Add the AI response to the chat history
-      messages.push({
-        role: 'assistant',
-        content: aiResponse
-      });
-      
-      // Transform to our internal format
-      return {
-        response: aiResponse,
-        chat_history: messages.map(msg => ({
-          id: crypto.randomUUID(),
-          content: msg.content,
-          sender: msg.role === 'user' ? 'user' : 'ai',
-          timestamp: new Date().toISOString(),
-          projectId
-        }))
-      };
+      return data.models || [];
     } catch (error) {
-      console.error('Error sending chat message:', error);
+      console.error('Error fetching models:', error);
+      
+      // Try to get default models from provider registry
+      const provider = providerRegistry.getProvider(aiProvider);
+      if (provider) {
+        return provider.getDefaultModels();
+      }
+      
       throw error;
     }
   }
-  
+
+  /**
+   * Get all available providers
+   */
+  async getProviders(): Promise<{ id: string; name: string }[]> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/api/models/providers`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `API error: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching providers:', error);
+      
+      // Return provider names from registry if API fails
+      const providerNames = providerRegistry.getProviderNames().map(p => ({
+        id: p.type,
+        name: p.name
+      }));
+      
+      return providerNames.length > 0 ? providerNames : [
+        { id: 'openai', name: 'OpenAI' },
+        { id: 'anthropic', name: 'Anthropic' },
+        { id: 'openai_compatible', name: 'OpenAI Compatible' }
+      ];
+    }
+  }
+
+  /**
+   * Validate an API key for a provider
+   */
+  async validateApiKey(providerId: AIProvider, apiKey: string, customEndpoint?: string): Promise<boolean> {
+    try {
+      if (!apiKey) {
+        return false;
+      }
+      
+      // Try to use the provider registry first
+      const provider = providerRegistry.getProvider(providerId);
+      if (provider) {
+        return await provider.validateApiKey(apiKey, customEndpoint);
+      }
+      
+      // Fall back to backend API if provider not found
+      const response = await fetch(`${this.apiBaseUrl}/api/models/validate`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          provider_id: providerId,
+          api_key: apiKey,
+          custom_endpoint: customEndpoint
+        }),
+      });
+      
+      if (!response.ok) {
+        return false;
+      }
+      
+      const data = await response.json();
+      return data.valid || false;
+    } catch (error) {
+      console.error('Error validating API key:', error);
+      return false;
+    }
+  }
+
   /**
    * Test AI configuration connection
    */
@@ -566,7 +238,13 @@ Format your response in Markdown.`;
         throw new Error('AI provider is required');
       }
       
-      // Use the backend API to test the connection
+      // Try to use the provider registry first
+      const provider = providerRegistry.getProvider(aiProvider);
+      if (provider) {
+        return await provider.testConnection(apiKey, model, "Hello, this is a test message from Projector.", customEndpoint);
+      }
+      
+      // Fall back to backend API if provider not found
       const response = await fetch(`${this.apiBaseUrl}/api/models/test`, {
         method: 'POST',
         headers: this.getHeaders(),
@@ -595,97 +273,6 @@ Format your response in Markdown.`;
   }
 
   /**
-   * Get available models for a provider
-   */
-  async getAvailableModels(aiProvider: string, apiKey: string, customEndpoint?: string): Promise<string[]> {
-    try {
-      if (!apiKey) {
-        throw new Error('API key is required');
-      }
-      
-      // Use the backend API to get available models
-      const response = await fetch(`${this.apiBaseUrl}/api/models/available`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          provider_id: aiProvider,
-          api_key: apiKey,
-          custom_endpoint: customEndpoint
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `API error: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      return data.models || [];
-    } catch (error) {
-      console.error('Error fetching models:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get all available providers
-   */
-  async getProviders(): Promise<{ id: string; name: string }[]> {
-    try {
-      const response = await fetch(`${this.apiBaseUrl}/api/models/providers`, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `API error: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching providers:', error);
-      // Return default providers if API fails
-      return [
-        { id: 'openai', name: 'OpenAI' },
-        { id: 'anthropic', name: 'Anthropic' },
-        { id: 'openai_compatible', name: 'OpenAI Compatible' }
-      ];
-    }
-  }
-
-  /**
-   * Validate an API key for a provider
-   */
-  async validateApiKey(providerId: string, apiKey: string, customEndpoint?: string): Promise<boolean> {
-    try {
-      if (!apiKey) {
-        return false;
-      }
-      
-      const response = await fetch(`${this.apiBaseUrl}/api/models/validate`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          provider_id: providerId,
-          api_key: apiKey,
-          custom_endpoint: customEndpoint
-        }),
-      });
-      
-      if (!response.ok) {
-        return false;
-      }
-      
-      const data = await response.json();
-      return data.valid || false;
-    } catch (error) {
-      console.error('Error validating API key:', error);
-      return false;
-    }
-  }
-
-  /**
    * Get GitHub repositories for the authenticated user
    */
   async getGithubRepositories(): Promise<{ id: string, name: string, full_name: string, url: string }[]> {
@@ -694,6 +281,22 @@ Format your response in Markdown.`;
         throw new Error('GitHub token is required');
       }
       
+      // First, validate the token by making a simple API call
+      const validateResponse = await fetch('https://api.github.com/user', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'Authorization': `Bearer ${this.githubToken}`,
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+      
+      if (!validateResponse.ok) {
+        const errorData = await validateResponse.json().catch(() => ({}));
+        throw new Error(errorData.message || `GitHub API error: ${validateResponse.status}`);
+      }
+      
+      // If token is valid, fetch repositories
       const response = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100', {
         method: 'GET',
         headers: {
