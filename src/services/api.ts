@@ -188,17 +188,10 @@ class APIService {
    * Get available AI providers
    */
   getAvailableProviders(): { id: string; name: string }[] {
-    const providerNames = providerRegistry.getProviderNames().map(p => ({
+    return providerRegistry.getProviderNames().map(p => ({
       id: p.type,
       name: p.name
     }));
-    
-    // Add OpenAI Compatible as a separate option
-    if (!providerNames.some(p => p.id === 'openai_compatible')) {
-      providerNames.push({ id: 'openai_compatible', name: 'OpenAI Compatible' });
-    }
-    
-    return providerNames;
   }
   
   /**

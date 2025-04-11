@@ -228,25 +228,44 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     
     try {
       if (aiProvider === 'openai_compatible') {
-        setTestResult({
-          success: true,
-          message: 'Using custom OpenAI-compatible configuration'
-        });
-        setIsTesting(false);
-        return;
-      }
-      
-      const result = await apiService.testConnection(
-        aiProvider,
-        apiKey,
-        model,
-        needsCustomEndpoint(aiProvider) ? customEndpoint : undefined
-      );
-      
-      setTestResult(result);
-      
-      if (result.success) {
-        fetchModels();
+        if (!baseApiEndpoint || !customModelInput) {
+          setTestResult({
+            success: false,
+            message: 'API endpoint and model name are required'
+          });
+          setIsTesting(false);
+          return;
+        }
+        
+        let endpoint = baseApiEndpoint;
+        if (!endpoint.endsWith('/v1')) {
+          if (endpoint.endsWith('/')) {
+            endpoint = endpoint.slice(0, -1);
+          }
+          endpoint += '/v1';
+        }
+        
+        const result = await apiService.testConnection(
+          aiProvider,
+          apiKey,
+          customModelInput,
+          endpoint
+        );
+        
+        setTestResult(result);
+      } else {
+        const result = await apiService.testConnection(
+          aiProvider,
+          apiKey,
+          model,
+          needsCustomEndpoint(aiProvider) ? customEndpoint : undefined
+        );
+        
+        setTestResult(result);
+        
+        if (result.success) {
+          fetchModels();
+        }
       }
     } catch (error) {
       console.error('Error testing connection:', error);
@@ -266,10 +285,37 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       setIsValidatingKey(true);
       try {
         if (aiProvider === 'openai_compatible') {
-          setTestResult({
-            success: true,
-            message: 'Using custom OpenAI-compatible configuration'
-          });
+          if (!baseApiEndpoint) {
+            setIsValidatingKey(false);
+            return;
+          }
+          
+          let endpoint = baseApiEndpoint;
+          if (!endpoint.endsWith('/v1')) {
+            if (endpoint.endsWith('/')) {
+              endpoint = endpoint.slice(0, -1);
+            }
+            endpoint += '/v1';
+          }
+          
+          const isValid = await apiService.validateApiKey(
+            aiProvider,
+            apiKey,
+            endpoint
+          );
+          
+          if (isValid) {
+            setTestResult({
+              success: true,
+              message: 'API key is valid'
+            });
+          } else {
+            setTestResult({
+              success: false,
+              message: 'API key is invalid or endpoint is unreachable'
+            });
+          }
+          
           setIsValidatingKey(false);
           return;
         }
@@ -309,14 +355,15 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         aiProvider === 'openai' || 
         aiProvider === 'anthropic' || 
         aiProvider === 'nvidia' ||
-        (needsCustomEndpoint(aiProvider) && customEndpoint)
+        (needsCustomEndpoint(aiProvider) && customEndpoint) ||
+        (aiProvider === 'openai_compatible' && baseApiEndpoint)
       )) {
         validateApiKey();
       }
     }, 1000);
     
     return () => clearTimeout(timer);
-  }, [apiKey, aiProvider, customEndpoint]);
+  }, [apiKey, aiProvider, customEndpoint, baseApiEndpoint]);
 
   useEffect(() => {
     if (apiKey && needsCustomEndpoint(aiProvider) && customEndpoint && aiProvider !== 'openai_compatible') {
