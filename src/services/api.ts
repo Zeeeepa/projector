@@ -60,8 +60,12 @@ export class ApiService {
       this.aiProvider = config.aiProvider;
       this.model = config.model;
       this.customEndpoint = config.customEndpoint || null;
+      if (config.apiBaseUrl) {
+        this.apiBaseUrl = config.apiBaseUrl;
+      }
     }
   }
+  
   /**
    * Set active Slack configuration
    */
@@ -145,7 +149,8 @@ export class ApiService {
           apiKey,
           model,
           [...formattedHistory, { role: 'user', content: message }],
-          customEndpoint || undefined
+          customEndpoint || undefined,
+          this.activeConfig?.apiBaseUrl
         );
         
         return { response };
@@ -185,7 +190,7 @@ export class ApiService {
       // Try to use the provider registry first
       const provider = providerRegistry.getProvider(aiProvider);
       if (provider) {
-        return await provider.getAvailableModels(apiKey, customEndpoint);
+        return await provider.getAvailableModels(apiKey, customEndpoint, this.activeConfig?.apiBaseUrl);
       }
       
       // Fall back to backend API if provider not found
@@ -264,7 +269,7 @@ export class ApiService {
       // Try to use the provider registry first
       const provider = providerRegistry.getProvider(providerId);
       if (provider) {
-        return await provider.validateApiKey(apiKey, customEndpoint);
+        return await provider.validateApiKey(apiKey, customEndpoint, this.activeConfig?.apiBaseUrl);
       }
       
       // Fall back to backend API if provider not found
@@ -333,7 +338,7 @@ export class ApiService {
       // Try to use the provider registry first
       const provider = providerRegistry.getProvider(aiProvider);
       if (provider) {
-        return await provider.testConnection(apiKey, model, "Hello, this is a test message from Projector.", customEndpoint);
+        return await provider.testConnection(apiKey, model, "Hello, this is a test message from Projector.", customEndpoint, config.apiBaseUrl);
       }
       
       // Fall back to backend API if provider not found

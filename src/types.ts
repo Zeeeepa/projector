@@ -28,6 +28,7 @@ export interface AIConfig {
   customEndpoint?: string;
   isVerified?: boolean;
   isCompatibleProvider?: boolean;
+  apiBaseUrl?: string;
 }
 
 export interface SlackConfig {
@@ -38,6 +39,7 @@ export interface SlackConfig {
   sendAsUser: boolean;
   isVerified?: boolean;
 }
+
 export interface ProjectStore {
   projects: Project[];
   activeProject: Project | null;
