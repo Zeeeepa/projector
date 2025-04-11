@@ -8,10 +8,9 @@ interface ProjectDialogProps {
 }
 
 interface GithubRepo {
-  id: string;
   name: string;
   full_name: string;
-  url: string;
+  description: string | null;
 }
 
 export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
@@ -35,7 +34,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
   const fetchGithubRepos = async () => {
     try {
       setLoading(true);
-      const repos = await apiService.getGithubRepositories();
+      const repos = await apiService.getGitHubRepositories();
       setGithubRepos(repos);
       setLoading(false);
     } catch (error) {
@@ -46,13 +45,13 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
   };
 
   const handleRepoSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const repoId = e.target.value;
-    setSelectedRepo(repoId);
+    const repoName = e.target.value;
+    setSelectedRepo(repoName);
     
-    if (repoId) {
-      const repo = githubRepos.find(r => r.id === repoId);
+    if (repoName) {
+      const repo = githubRepos.find(r => r.full_name === repoName);
       if (repo) {
-        setGithubUrl(repo.url);
+        setGithubUrl(`https://github.com/${repo.full_name}`);
         if (!name) {
           setName(repo.name);
         }
@@ -156,7 +155,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
                 >
                   <option value="">Select a repository</option>
                   {githubRepos.map(repo => (
-                    <option key={repo.id} value={repo.id}>
+                    <option key={repo.full_name} value={repo.full_name}>
                       {repo.full_name}
                     </option>
                   ))}
