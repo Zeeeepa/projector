@@ -103,6 +103,77 @@ export class ApiService {
   }
 
   /**
+   * Send a chat message to the AI provider
+   * @param message The message to send
+   * @param projectId Optional project ID for context
+   * @param chatHistory Optional chat history
+   */
+  async sendChatMessage(
+    message: string,
+    projectId?: string,
+    chatHistory?: ChatMessage[]
+  ): Promise<{ response: string }> {
+    try {
+      // Use active config if available, otherwise use global settings
+      const apiKey = this.activeConfig?.apiKey || this.apiKey;
+      const model = this.activeConfig?.model || this.model;
+      const provider = this.activeConfig?.aiProvider || this.aiProvider;
+      const customEndpoint = this.activeConfig?.customEndpoint || this.customEndpoint;
+      
+      if (!apiKey) {
+        throw new Error('API key is required');
+      }
+      
+      if (!model) {
+        throw new Error('Model is required');
+      }
+      
+      if (!provider) {
+        throw new Error('AI provider is required');
+      }
+      
+      // Format chat history for the provider
+      const formattedHistory = chatHistory?.map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      })) || [];
+      
+      // Try to use the provider registry first
+      const providerInstance = providerRegistry.getProvider(provider);
+      if (providerInstance) {
+        const response = await providerInstance.sendChatMessage(
+          apiKey,
+          model,
+          [...formattedHistory, { role: 'user', content: message }],
+          customEndpoint || undefined
+        );
+        
+        return { response };
+      }
+      
+      // Fall back to backend API if provider not found
+      const response = await fetch(`${this.apiBaseUrl}/api/chat/`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          message,
+          chat_history: formattedHistory,
+          provider_id: provider,
+          model,
+          api_key: apiKey,
+          custom_endpoint: customEndpoint,
+          project_id: projectId
+        }),
+      });
+      
+      return this.handleResponse<{ response: string }>(response);
+    } catch (error) {
+      console.error('Error sending chat message:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get available models for a provider
    */
   async getAvailableModels(aiProvider: AIProvider, apiKey: string, customEndpoint?: string): Promise<string[]> {
@@ -321,6 +392,79 @@ export class ApiService {
     } catch (error) {
       console.error('Error fetching GitHub repositories:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Upload a document to a project
+   */
+  async uploadDocument(projectId: string, file: File, category: string): Promise<string> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('category', category);
+      
+      const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}/documents`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      return result.message || 'Document uploaded successfully';
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate a project plan
+   */
+  async generateProjectPlan(projectId: string, context: string): Promise<string> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}/plan`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          context
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      return result.plan || 'Plan generated successfully';
+    } catch (error) {
+      console.error('Error generating project plan:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all projects
+   */
+  async getProjects(): Promise<Project[]> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/api/projects`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+      
+      return this.handleResponse<Project[]>(response);
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+      return [];
     }
   }
 }

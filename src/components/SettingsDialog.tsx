@@ -32,6 +32,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [customEndpoint, setCustomEndpoint] = useState('');
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
+  const [isCompatibleProvider, setIsCompatibleProvider] = useState(false);
   
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -55,6 +56,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         setModel(activeConfig.model);
         setAiProvider(activeConfig.aiProvider);
         setCustomEndpoint(activeConfig.customEndpoint || '');
+        setIsCompatibleProvider(!!activeConfig.isCompatibleProvider);
       }
     } else {
       resetConfigForm();
@@ -73,6 +75,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setModel('');
     setAiProvider('openai');
     setCustomEndpoint('');
+    setIsCompatibleProvider(false);
     setTestResult(null);
   };
 
@@ -109,7 +112,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       model,
       aiProvider,
       customEndpoint: customEndpoint || undefined,
-      isVerified: testResult?.success || false
+      isVerified: testResult?.success || false,
+      isCompatibleProvider
     };
     
     if (editingConfigId) {
@@ -134,6 +138,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setModel(config.model);
     setAiProvider(config.aiProvider);
     setCustomEndpoint(config.customEndpoint || '');
+    setIsCompatibleProvider(!!config.isCompatibleProvider);
     setTestResult(config.isVerified ? { success: true, message: 'Configuration verified' } : null);
   };
 
@@ -417,6 +422,22 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         ))}
                       </select>
                     </div>
+                    
+                    {aiProvider === 'openai_compatible' && (
+                      <div className="flex items-center">
+                        <input
+                          id="isCompatibleProvider"
+                          type="checkbox"
+                          checked={isCompatibleProvider}
+                          onChange={(e) => setIsCompatibleProvider(e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-700 text-indigo-600 focus:ring-indigo-500 bg-gray-800"
+                        />
+                        <label htmlFor="isCompatibleProvider" className="ml-2 block text-sm text-gray-300">
+                          OpenAI API Compatible
+                        </label>
+                        <span className="ml-1 text-xs text-gray-400">(e.g., Anthropic, Mistral, etc.)</span>
+                      </div>
+                    )}
                     
                     <div>
                       <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300">
