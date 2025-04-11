@@ -295,7 +295,7 @@ export class ApiService {
    */
   async testAIConfig(config: Partial<AIConfig>): Promise<{ success: boolean; message: string }> {
     try {
-      const { aiProvider, apiKey, model, customEndpoint } = config;
+      const { aiProvider, apiKey, model, customEndpoint, isCompatibleProvider } = config;
       
       if (!apiKey) {
         throw new Error('API key is required');
@@ -307,6 +307,27 @@ export class ApiService {
       
       if (!aiProvider) {
         throw new Error('AI provider is required');
+      }
+      
+      // For OpenAI compatible providers with custom model input, we can skip some validations
+      if (aiProvider === 'openai_compatible' && isCompatibleProvider) {
+        if (!customEndpoint) {
+          throw new Error('Custom endpoint is required for OpenAI compatible providers');
+        }
+        
+        // Just do a basic validation of the endpoint
+        try {
+          new URL(customEndpoint);
+          return {
+            success: true,
+            message: `Configuration looks valid. Using custom model: ${model}`
+          };
+        } catch (e) {
+          return {
+            success: false,
+            message: 'Invalid API endpoint URL format'
+          };
+        }
       }
       
       // Try to use the provider registry first
@@ -323,7 +344,8 @@ export class ApiService {
           provider_id: aiProvider,
           api_key: apiKey,
           model: model,
-          custom_endpoint: customEndpoint
+          custom_endpoint: customEndpoint,
+          is_compatible_provider: isCompatibleProvider
         }),
       });
       

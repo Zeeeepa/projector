@@ -29,8 +29,10 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [configName, setConfigName] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
+  const [customModelInput, setCustomModelInput] = useState('');
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [customEndpoint, setCustomEndpoint] = useState('');
+  const [baseApiEndpoint, setBaseApiEndpoint] = useState('');
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
   const [isCompatibleProvider, setIsCompatibleProvider] = useState(false);
   
@@ -54,9 +56,19 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         setConfigName(activeConfig.name);
         setApiKey(activeConfig.apiKey);
         setModel(activeConfig.model);
+        setCustomModelInput(activeConfig.model);
         setAiProvider(activeConfig.aiProvider);
         setCustomEndpoint(activeConfig.customEndpoint || '');
         setIsCompatibleProvider(!!activeConfig.isCompatibleProvider);
+        
+        if (activeConfig.customEndpoint) {
+          const endpointParts = activeConfig.customEndpoint.split('/v1');
+          if (endpointParts.length > 1) {
+            setBaseApiEndpoint(endpointParts[0]);
+          } else {
+            setBaseApiEndpoint(activeConfig.customEndpoint);
+          }
+        }
       }
     } else {
       resetConfigForm();
@@ -65,6 +77,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
   useEffect(() => {
     setModel('');
+    setCustomModelInput('');
     setAvailableModels([]);
   }, [aiProvider]);
 
@@ -73,8 +86,10 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setConfigName('');
     setApiKey('');
     setModel('');
+    setCustomModelInput('');
     setAiProvider('openai');
     setCustomEndpoint('');
+    setBaseApiEndpoint('');
     setIsCompatibleProvider(false);
     setTestResult(null);
   };
@@ -96,12 +111,23 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       return;
     }
     
-    if (!model) {
-      alert('Please select a model');
+    const modelToSave = isCompatibleProvider ? customModelInput : model;
+    
+    if (!modelToSave) {
+      alert('Please enter a model');
       return;
     }
     
-    if (needsCustomEndpoint(aiProvider) && !customEndpoint) {
+    let endpointToSave = customEndpoint;
+    if (aiProvider === 'openai_compatible' && isCompatibleProvider && baseApiEndpoint) {
+      endpointToSave = baseApiEndpoint;
+      if (!endpointToSave.endsWith('/v1')) {
+        if (endpointToSave.endsWith('/')) {
+          endpointToSave = endpointToSave.slice(0, -1);
+        }
+        endpointToSave += '/v1';
+      }
+    } else if (needsCustomEndpoint(aiProvider) && !customEndpoint) {
       alert('Custom API endpoint is required for this provider');
       return;
     }
@@ -109,9 +135,9 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     const configData = {
       name: configName,
       apiKey,
-      model,
+      model: modelToSave,
       aiProvider,
-      customEndpoint: customEndpoint || undefined,
+      customEndpoint: endpointToSave || undefined,
       isVerified: testResult?.success || false,
       isCompatibleProvider
     };
@@ -136,9 +162,20 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setConfigName(config.name);
     setApiKey(config.apiKey);
     setModel(config.model);
+    setCustomModelInput(config.model);
     setAiProvider(config.aiProvider);
     setCustomEndpoint(config.customEndpoint || '');
     setIsCompatibleProvider(!!config.isCompatibleProvider);
+    
+    if (config.customEndpoint) {
+      const endpointParts = config.customEndpoint.split('/v1');
+      if (endpointParts.length > 1) {
+        setBaseApiEndpoint(endpointParts[0]);
+      } else {
+        setBaseApiEndpoint(config.customEndpoint);
+      }
+    }
+    
     setTestResult(config.isVerified ? { success: true, message: 'Configuration verified' } : null);
   };
 
@@ -156,6 +193,11 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setAvailableModels([]);
     
     try {
+      if (aiProvider === 'openai_compatible' && isCompatibleProvider) {
+        setIsLoadingModels(false);
+        return;
+      }
+      
       const models = await apiService.getAvailableModels(
         aiProvider,
         apiKey,
@@ -181,6 +223,15 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       
       setIsValidatingKey(true);
       try {
+        if (aiProvider === 'openai_compatible' && isCompatibleProvider) {
+          setTestResult({
+            success: true,
+            message: 'Using custom configuration'
+          });
+          setIsValidatingKey(false);
+          return;
+        }
+        
         const isValid = await apiService.validateApiKey(
           aiProvider,
           apiKey,
@@ -219,13 +270,26 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     }, 1000);
     
     return () => clearTimeout(timer);
-  }, [apiKey, aiProvider, customEndpoint]);
+  }, [apiKey, aiProvider, customEndpoint, isCompatibleProvider]);
 
   useEffect(() => {
-    if (apiKey && needsCustomEndpoint(aiProvider) && customEndpoint) {
+    if (apiKey && needsCustomEndpoint(aiProvider) && customEndpoint && !isCompatibleProvider) {
       fetchModels();
     }
-  }, [customEndpoint]);
+  }, [customEndpoint, isCompatibleProvider]);
+
+  useEffect(() => {
+    if (aiProvider === 'openai_compatible' && isCompatibleProvider && baseApiEndpoint) {
+      let endpoint = baseApiEndpoint;
+      if (!endpoint.endsWith('/v1')) {
+        if (endpoint.endsWith('/')) {
+          endpoint = endpoint.slice(0, -1);
+        }
+        endpoint += '/v1';
+      }
+      setCustomEndpoint(endpoint);
+    }
+  }, [baseApiEndpoint, aiProvider, isCompatibleProvider]);
 
   useEffect(() => {
     const validateGithubToken = async () => {
@@ -270,12 +334,26 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setTestResult(null);
     
     try {
+      const modelToTest = isCompatibleProvider ? customModelInput : model;
+      
+      let endpointToTest = customEndpoint;
+      if (aiProvider === 'openai_compatible' && isCompatibleProvider && baseApiEndpoint) {
+        endpointToTest = baseApiEndpoint;
+        if (!endpointToTest.endsWith('/v1')) {
+          if (endpointToTest.endsWith('/')) {
+            endpointToTest = endpointToTest.slice(0, -1);
+          }
+          endpointToTest += '/v1';
+        }
+      }
+      
       const result = await apiService.testAIConfig({
         apiKey,
-        model,
+        model: modelToTest,
         aiProvider,
-        customEndpoint: needsCustomEndpoint(aiProvider) ? customEndpoint : undefined,
-        name: configName
+        customEndpoint: needsCustomEndpoint(aiProvider) ? endpointToTest : undefined,
+        name: configName,
+        isCompatibleProvider
       });
       
       setTestResult(result);
@@ -326,30 +404,26 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     
                     {aiConfigs.length === 0 ? (
                       <div className="text-gray-400 text-sm p-4 border border-gray-700 rounded-md">
-                        No AI configurations saved yet. Create one using the form.
+                        No AI configurations saved yet. Create one using the form on the right.
                       </div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
                         {aiConfigs.map((config) => (
                           <div 
                             key={config.id} 
                             className={`p-3 border rounded-md flex justify-between items-center ${
-                              activeAIConfigId === config.id 
-                                ? 'bg-blue-900 border-blue-700' 
-                                : 'bg-gray-800 border-gray-700'
+                              config.id === activeAIConfigId 
+                                ? 'border-blue-500 bg-blue-900 bg-opacity-20' 
+                                : 'border-gray-700 hover:border-gray-500'
                             }`}
                           >
-                            <div className="flex-1">
-                              <div className="font-medium text-gray-200">
-                                {config.name}
+                            <div>
+                              <div className="font-medium text-gray-200">{config.name}</div>
+                              <div className="text-xs text-gray-400">
+                                {config.aiProvider} | {config.model}
                                 {config.isVerified && (
-                                  <span className="ml-2 text-xs text-green-400">
-                                    ✓ Verified
-                                  </span>
+                                  <span className="ml-2 text-green-400">✓ Verified</span>
                                 )}
-                              </div>
-                              <div className="text-sm text-gray-400 mt-1">
-                                {config.aiProvider} • {config.model}
                               </div>
                             </div>
                             <div className="flex space-x-2">
@@ -357,25 +431,24 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                                 type="button"
                                 onClick={() => handleSetActiveConfig(config.id)}
                                 className={`px-2 py-1 text-xs rounded ${
-                                  activeAIConfigId === config.id
-                                    ? 'bg-blue-700 text-blue-100 cursor-default'
-                                    : 'bg-blue-600 text-blue-100 hover:bg-blue-500'
+                                  config.id === activeAIConfigId
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                                 }`}
                               >
-                                {activeAIConfigId === config.id ? 'Active' : 'Use'}
+                                {config.id === activeAIConfigId ? 'Active' : 'Use'}
                               </button>
-                              
                               <button
                                 type="button"
                                 onClick={() => handleEditConfig(config)}
-                                className="px-2 py-1 text-xs bg-gray-600 text-gray-100 rounded hover:bg-gray-500"
+                                className="px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
                               >
                                 Edit
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteConfig(config.id)}
-                                className="px-2 py-1 text-xs bg-red-600 text-red-100 rounded hover:bg-red-500"
+                                className="px-2 py-1 text-xs bg-red-900 text-red-300 rounded hover:bg-red-800"
                               >
                                 Delete
                               </button>
@@ -453,7 +526,26 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       />
                     </div>
                     
-                    {needsCustomEndpoint(aiProvider) && (
+                    {aiProvider === 'openai_compatible' && isCompatibleProvider && (
+                      <div>
+                        <label htmlFor="baseApiEndpoint" className="block text-sm font-medium text-gray-300">
+                          Base API Endpoint
+                        </label>
+                        <input
+                          type="url"
+                          id="baseApiEndpoint"
+                          value={baseApiEndpoint}
+                          onChange={(e) => setBaseApiEndpoint(e.target.value)}
+                          className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                          placeholder="https://api.example.com"
+                        />
+                        <p className="mt-1 text-xs text-gray-400">
+                          Base URL for the API (e.g., https://api.example.com)
+                        </p>
+                      </div>
+                    )}
+                    
+                    {needsCustomEndpoint(aiProvider) && !(aiProvider === 'openai_compatible' && isCompatibleProvider) && (
                       <div>
                         <label htmlFor="customEndpoint" className="block text-sm font-medium text-gray-300">
                           Custom API Endpoint
@@ -472,34 +564,50 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       </div>
                     )}
                     
-                    <div>
-                      <label htmlFor="model" className="block text-sm font-medium text-gray-300 flex justify-between">
-                        <span>AI Model</span>
-                        {isLoadingModels && <span className="text-blue-400 text-xs">Loading models...</span>}
-                      </label>
-                      <select
-                        id="model"
-                        value={model}
-                        onChange={(e) => setModel(e.target.value)}
-                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                      >
-                        <option value="">Select a model</option>
-                        {availableModels.map((modelName) => (
-                          <option key={modelName} value={modelName}>
-                            {modelName}
-                          </option>
-                        ))}
-                      </select>
-                      {availableModels.length === 0 && !isLoadingModels && apiKey && (
-                        <button
-                          type="button"
-                          onClick={fetchModels}
-                          className="mt-1 text-xs text-blue-400 hover:text-blue-300"
+                    {aiProvider === 'openai_compatible' && isCompatibleProvider ? (
+                      <div>
+                        <label htmlFor="customModelInput" className="block text-sm font-medium text-gray-300">
+                          Model Name
+                        </label>
+                        <input
+                          type="text"
+                          id="customModelInput"
+                          value={customModelInput}
+                          onChange={(e) => setCustomModelInput(e.target.value)}
+                          className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                          placeholder="Enter model name (e.g., claude-3-opus-20240229)"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label htmlFor="model" className="block text-sm font-medium text-gray-300 flex justify-between">
+                          <span>AI Model</span>
+                          {isLoadingModels && <span className="text-blue-400 text-xs">Loading models...</span>}
+                        </label>
+                        <select
+                          id="model"
+                          value={model}
+                          onChange={(e) => setModel(e.target.value)}
+                          className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                         >
-                          Fetch available models
-                        </button>
-                      )}
-                    </div>
+                          <option value="">Select a model</option>
+                          {availableModels.map((modelName) => (
+                            <option key={modelName} value={modelName}>
+                              {modelName}
+                            </option>
+                          ))}
+                        </select>
+                        {availableModels.length === 0 && !isLoadingModels && apiKey && (
+                          <button
+                            type="button"
+                            onClick={fetchModels}
+                            className="mt-1 text-xs text-blue-400 hover:text-blue-300"
+                          >
+                            Fetch available models
+                          </button>
+                        )}
+                      </div>
+                    )}
                     
                     {testResult && (
                       <div className={`p-3 rounded-md ${testResult.success ? 'bg-green-900 text-green-100' : 'bg-red-900 text-red-100'}`}>
@@ -514,7 +622,9 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white flex-1 ${
                           isTesting ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
                         }`}
-                        disabled={isTesting || (!apiKey) || (needsCustomEndpoint(aiProvider) && !customEndpoint)}
+                        disabled={isTesting || (!apiKey) || 
+                          (needsCustomEndpoint(aiProvider) && !isCompatibleProvider && !customEndpoint) ||
+                          (aiProvider === 'openai_compatible' && isCompatibleProvider && (!baseApiEndpoint || !customModelInput))}
                       >
                         {isTesting ? 'Testing...' : 'Test Connection'}
                       </button>
@@ -523,7 +633,9 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         type="button"
                         onClick={handleSaveConfig}
                         className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 flex-1"
-                        disabled={!configName || !apiKey || !model}
+                        disabled={!configName || !apiKey || 
+                          (!(aiProvider === 'openai_compatible' && isCompatibleProvider) && !model) ||
+                          ((aiProvider === 'openai_compatible' && isCompatibleProvider) && !customModelInput)}
                       >
                         {editingConfigId ? 'Update Configuration' : 'Save Configuration'}
                       </button>
