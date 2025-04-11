@@ -89,7 +89,11 @@ class APIService {
   /**
    * Send a chat message to the AI
    */
-  async sendChatMessage(message: string, projectId?: string): Promise<string> {
+  async sendChatMessage(
+    message: string, 
+    projectId?: string,
+    chatHistory: ChatMessage[] = []
+  ): Promise<{ response: string; chat_history: ChatMessage[] }> {
     try {
       // Use active config if available, otherwise use global settings
       const apiKey = this.activeConfig?.apiKey || this.apiKey;
@@ -110,19 +114,51 @@ class APIService {
         throw new Error('AI provider is required');
       }
       
+      // Convert chat history to the format expected by the provider
+      const formattedHistory = chatHistory.map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }));
+      
+      // Add the current message
+      formattedHistory.push({ role: 'user', content: message });
+      
       // Use provider-specific implementation
       const providerInstance = providerRegistry.getProvider(aiProvider);
       if (!providerInstance) {
         throw new Error(`Provider ${aiProvider} not found`);
       }
       
-      return await providerInstance.sendChatMessage(
+      // Send the message to the provider
+      const response = await providerInstance.sendChatMessage(
         apiKey,
         model,
-        [{ role: 'user', content: message }],
+        formattedHistory,
         customEndpoint,
         apiBaseUrl
       );
+      
+      // Return the response with updated chat history
+      return {
+        response,
+        chat_history: [
+          ...chatHistory,
+          { 
+            id: crypto.randomUUID(),
+            content: message,
+            sender: 'user',
+            timestamp: new Date().toISOString(),
+            projectId
+          },
+          {
+            id: crypto.randomUUID(),
+            content: response,
+            sender: 'ai',
+            timestamp: new Date().toISOString(),
+            projectId
+          }
+        ]
+      };
     } catch (error) {
       console.error('Error sending chat message:', error);
       throw error;

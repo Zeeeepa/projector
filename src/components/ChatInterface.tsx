@@ -115,10 +115,14 @@ export function ChatInterface() {
       }
 
       try {
+        const filteredMessages = selectedProjectId 
+          ? messages.filter(msg => !msg.projectId || msg.projectId === selectedProjectId)
+          : messages;
+
         const response = await apiService.sendChatMessage(
           contextPrompt + message,
           selectedProjectId || undefined,
-          messages
+          filteredMessages
         );
 
         addMessage({
@@ -174,7 +178,7 @@ export function ChatInterface() {
               onChange={handleAIConfigChange}
               className="bg-gray-800 border border-gray-700 text-gray-100 text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 p-1.5"
             >
-              <option value="">Global Settings</option>
+              <option value="">Global Chat</option>
               {aiConfigs.map((config) => (
                 <option key={config.id} value={config.id}>
                   {config.name} {config.isVerified ? '✓' : ''}
