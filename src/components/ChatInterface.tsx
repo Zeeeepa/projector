@@ -6,6 +6,7 @@ import { Project } from '../types';
 export function ChatInterface() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { messages, addMessage, clearMessages } = useChatStore();
   const { 
     projects, 
@@ -68,6 +69,8 @@ export function ChatInterface() {
     e.preventDefault();
     if (!message.trim()) return;
 
+    setError(null);
+
     addMessage({
       content: message,
       sender: 'user',
@@ -124,9 +127,12 @@ export function ChatInterface() {
       });
     } catch (error) {
       console.error('Error sending message:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
+      setError(errorMessage);
 
       addMessage({
-        content: `Error: ${error instanceof Error ? error.message : 'Failed to send message'}`,
+        content: `Error: ${errorMessage}`,
         sender: 'ai',
         projectId: selectedProjectId || undefined,
       });
@@ -184,6 +190,13 @@ export function ChatInterface() {
           </div>
         </div>
       </div>
+      
+      {error && (
+        <div className="bg-red-900 text-red-100 p-2 text-sm">
+          Error: {error}
+        </div>
+      )}
+      
       <div className="flex-1 p-4 overflow-y-auto bg-gray-900">
         <div className="space-y-4">
           {filteredMessages.length === 0 && (
