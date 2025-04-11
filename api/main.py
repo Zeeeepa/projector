@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 # Import routes
-from .routes import models
+from .routes import models, projects, chat, github, slack
 
 # Load environment variables with explicit encoding
 try:
@@ -54,42 +54,25 @@ app.add_middleware(
 
 # Include routers
 app.include_router(models.router, prefix="/api")
+try:
+    app.include_router(projects.router, prefix="/api")
+except ImportError:
+    logger.warning("Projects router not found, skipping")
 
-# Define models
-class Project(BaseModel):
-    id: str
-    name: str
-    description: str
-    github_url: str = None
-    slack_channel: str = None
+try:
+    app.include_router(chat.router, prefix="/api")
+except ImportError:
+    logger.warning("Chat router not found, skipping")
 
-class ProjectCreate(BaseModel):
-    name: str
-    description: str
-    github_url: str = None
-    slack_channel: str = None
+try:
+    app.include_router(github.router, prefix="/api")
+except ImportError:
+    logger.warning("GitHub router not found, skipping")
 
-# Sample data
-projects = []
-
-# API Routes
-@app.get("/api/projects")
-async def get_projects():
-    """Get all projects."""
-    return projects
-
-@app.post("/api/projects")
-async def create_project(project: ProjectCreate):
-    """Create a new project."""
-    new_project = Project(
-        id=f"proj_{len(projects) + 1}",
-        name=project.name,
-        description=project.description,
-        github_url=project.github_url,
-        slack_channel=project.slack_channel
-    )
-    projects.append(new_project)
-    return new_project
+try:
+    app.include_router(slack.router, prefix="/api")
+except ImportError:
+    logger.warning("Slack router not found, skipping")
 
 @app.get("/api/health")
 async def health_check():
