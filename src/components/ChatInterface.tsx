@@ -114,21 +114,34 @@ export function ChatInterface() {
         }
       }
 
-      const response = await apiService.sendChatMessage(
-        contextPrompt + message,
-        selectedProjectId || undefined,
-        messages
-      );
+      try {
+        const response = await apiService.sendChatMessage(
+          contextPrompt + message,
+          selectedProjectId || undefined,
+          messages
+        );
 
-      addMessage({
-        content: response.response,
-        sender: 'ai',
-        projectId: selectedProjectId || undefined,
-      });
+        addMessage({
+          content: response.response,
+          sender: 'ai',
+          projectId: selectedProjectId || undefined,
+        });
+      } catch (error) {
+        console.error('Error sending message:', error);
+        
+        const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
+        setError(errorMessage);
+
+        addMessage({
+          content: `Error: ${errorMessage}`,
+          sender: 'ai',
+          projectId: selectedProjectId || undefined,
+        });
+      }
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error setting up chat:', error);
       
-      const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to set up chat';
       setError(errorMessage);
 
       addMessage({
