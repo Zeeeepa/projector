@@ -27,6 +27,7 @@ export interface AIConfig {
   aiProvider: AIProvider;
   customEndpoint?: string;
   isVerified?: boolean;
+  isCompatibleProvider?: boolean;
 }
 
 export interface SlackConfig {
@@ -76,11 +77,11 @@ export interface APISettings {
 
 /**
  * Supported AI providers
- * - Open_AI: OpenAI API (GPT models)
- * - Anthropic: Anthropic API (Claude models)
- * - Nvidia: Nvidia API
- * - Open_AI_Compatible: OpenAI-compatible APIs (DeepInfra, OpenRouter, etc.)
- * - DeepInfra: DeepInfra API
- * - OpenRouter: OpenRouter API
+ * - openai: OpenAI API (GPT models)
+ * - anthropic: Anthropic API (Claude models)
+ * - nvidia: Nvidia API
+ * - openai_compatible: OpenAI-compatible APIs
+ * - deepinfra: DeepInfra API
+ * - openrouter: OpenRouter API
  */
-export type AIProvider = 'Open_AI' | 'Anthropic' | 'Open_AI_Compatible' | 'Nvidia' | 'DeepInfra' | 'OpenRouter';
+export type AIProvider = 'openai' | 'anthropic' | 'openai_compatible' | 'nvidia' | 'deepinfra' | 'openrouter';
