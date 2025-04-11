@@ -1,34 +1,35 @@
 """
-AI User Agent for the Projector system.
-
-This agent is responsible for:
-1. Analyzing project requirements from markdown documents
-2. Creating implementation plans
-3. Sending requests to the Assistant Agent via Slack
-4. Monitoring project progress and comparing with requirements
-5. Formulating follow-up requests when needed
-6. Providing chat responses for project-specific questions
+AI User Agent for the Projector application.
 """
 import os
-import re
 import json
 import logging
 import time
-import threading
-from typing import Dict, List, Optional, Any
 import uuid
+import asyncio
+from typing import List, Dict, Any, Optional, Union, Callable
+from datetime import datetime, timedelta
+import threading
+import queue
+import traceback
+import re
+import base64
+import hashlib
+import random
+import string
+import tempfile
+import shutil
+import subprocess
+import requests
+from pathlib import Path
 
-from codegen.agents.chat_agent import ChatAgent
-from codegen.agents.planning_agent import PlanningAgent
-from codegen.agents.code_agent import CodeAgent
-
-from projector.backend.slack_manager import SlackManager
-from projector.backend.github_manager import GitHubManager
-from projector.backend.project_database import ProjectDatabase
-from projector.backend.project import Project
-from projector.backend.planning_manager import PlanningManager
-from projector.backend.thread_pool import ThreadPool
-from projector.backend.project_manager import ProjectManager
+from backend.slack_manager import SlackManager
+from backend.github_manager import GitHubManager
+from backend.project_database import ProjectDatabase
+from backend.project import Project
+from backend.planning_manager import PlanningManager
+from backend.thread_pool import ThreadPool
+from backend.project_manager import ProjectManager
 
 class AIUserAgent:
     """

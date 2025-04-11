@@ -5,9 +5,9 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Body
 from pydantic import BaseModel
 
-from projector.backend.project_database import ProjectDatabase
-from projector.backend.ai_user_agent import AIUserAgent
-from projector.api.main import get_project_database, get_ai_user_agent
+from backend.project_database import ProjectDatabase
+from backend.ai_user_agent import AIUserAgent
+from api.main import get_project_database, get_ai_user_agent
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 

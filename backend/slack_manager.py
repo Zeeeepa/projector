@@ -1,10 +1,13 @@
+"""
+Slack Manager for the Projector application.
+"""
 import os
 import logging
 import time
 import json
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
-from projector.backend.thread_pool import ThreadPool
+from backend.thread_pool import ThreadPool
 
 class SlackManager:
     """Manager for Slack integration with multithreading capabilities."""
