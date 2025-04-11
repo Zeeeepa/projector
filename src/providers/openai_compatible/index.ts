@@ -29,6 +29,8 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
     if (!apiKey || !customEndpoint) return false;
     
     try {
+      console.log(`Validating OpenAI Compatible API key with endpoint: ${customEndpoint}`);
+      
       // Make a minimal API call to validate the key
       const response = await fetch(`${customEndpoint}/models`, {
         method: 'GET',
@@ -37,6 +39,11 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
           'Content-Type': 'application/json'
         }
       });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API validation error (${response.status}):`, errorText);
+      }
       
       return response.ok;
     } catch (error) {
@@ -54,6 +61,8 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
     }
     
     try {
+      console.log(`Fetching models from OpenAI Compatible API: ${customEndpoint}`);
+      
       const response = await fetch(`${customEndpoint}/models`, {
         method: 'GET',
         headers: {
@@ -64,11 +73,12 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('API error response:', errorText);
+        console.error(`API error response (${response.status}):`, errorText);
         throw new ProviderApiError(`API error: ${response.status} - ${errorText}`);
       }
       
       const data = await response.json();
+      console.log('Models response:', data);
       
       // Extract model IDs from the response
       if (data.data && Array.isArray(data.data)) {
@@ -101,7 +111,18 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
     try {
       console.log(`Testing connection to ${customEndpoint} with model ${model}`);
       
-      const response = await fetch(`${customEndpoint}/chat/completions`, {
+      // Ensure the endpoint has the correct format
+      let endpoint = customEndpoint;
+      if (!endpoint.endsWith('/v1') && !endpoint.endsWith('/v1/')) {
+        if (endpoint.endsWith('/')) {
+          endpoint = endpoint.slice(0, -1);
+        }
+        endpoint += '/v1';
+      }
+      
+      console.log(`Using formatted endpoint: ${endpoint}`);
+      
+      const response = await fetch(`${endpoint}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -117,7 +138,7 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('API error response:', errorText);
+        console.error(`API error response (${response.status}):`, errorText);
         
         let errorMessage = `API error: ${response.status}`;
         try {
@@ -173,9 +194,19 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
     }
     
     try {
-      console.log(`Sending message to ${endpoint}/chat/completions with model ${model}`);
+      // Ensure the endpoint has the correct format
+      let formattedEndpoint = endpoint;
+      if (!formattedEndpoint.endsWith('/v1') && !formattedEndpoint.endsWith('/v1/')) {
+        if (formattedEndpoint.endsWith('/')) {
+          formattedEndpoint = formattedEndpoint.slice(0, -1);
+        }
+        formattedEndpoint += '/v1';
+      }
       
-      const response = await fetch(`${endpoint}/chat/completions`, {
+      console.log(`Sending message to ${formattedEndpoint}/chat/completions with model ${model}`);
+      console.log('Messages:', JSON.stringify(messages));
+      
+      const response = await fetch(`${formattedEndpoint}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -191,7 +222,7 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('API error response:', errorText);
+        console.error(`API error response (${response.status}):`, errorText);
         
         let errorMessage = `API error: ${response.status}`;
         try {
@@ -208,6 +239,8 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       }
       
       const data = await response.json();
+      console.log('API response:', data);
+      
       return data.choices?.[0]?.message?.content || 'No response from AI';
     } catch (error) {
       console.error('Error sending message to OpenAI Compatible API:', error);
