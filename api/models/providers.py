@@ -4,13 +4,10 @@ Initialize and register all model providers
 from .registry import get_provider_registry
 from .openai import OpenAIProvider, OpenAICompatibleProvider
 from .anthropic import AnthropicProvider
+from .nvidia import NvidiaProvider
+from .deepinfra import DeepInfraProvider
+from .openrouter import OpenRouterProvider
 
-# Import other providers as they are implemented
-# from .nvidia import NvidiaProvider
-# from .deepinfra import DeepInfraProvider
-# from .openrouter import OpenRouterProvider
-
-# Initialize providers on module import
 def register_providers():
     """Register all available model providers with the registry"""
     registry = get_provider_registry()
@@ -22,10 +19,10 @@ def register_providers():
     # Register Anthropic provider
     registry.register_provider(AnthropicProvider())
     
-    # Register other providers as they are implemented
-    # registry.register_provider(NvidiaProvider())
-    # registry.register_provider(DeepInfraProvider())
-    # registry.register_provider(OpenRouterProvider())
+    # Register other providers
+    registry.register_provider(NvidiaProvider())
+    registry.register_provider(DeepInfraProvider())
+    registry.register_provider(OpenRouterProvider())
     
     return registry
 

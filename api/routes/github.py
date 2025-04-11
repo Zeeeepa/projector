@@ -2,14 +2,14 @@
 API routes for GitHub integration.
 """
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 
 from projector.backend.github_manager import GitHubManager
 from projector.api.main import get_github_manager
 
-router = APIRouter()
+router = APIRouter(prefix="/github", tags=["github"])
 
 class RepoContents(BaseModel):
     """Model for repository contents."""
@@ -198,3 +198,8 @@ async def get_recent_merges(
         raise HTTPException(status_code=500, detail="Error getting recent merges")
     
     return merges
+
+@router.get("/")
+async def get_github_status():
+    """Get GitHub integration status."""
+    return {"status": "not_configured"}
