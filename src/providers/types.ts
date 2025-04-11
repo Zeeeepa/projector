@@ -18,15 +18,17 @@ export interface ModelProviderInterface {
    * Validate API key
    * @param apiKey API key to validate
    * @param customEndpoint Optional custom endpoint for compatible providers
+   * @param apiBaseUrl Optional base URL for the API (for OpenAI)
    */
-  validateApiKey(apiKey: string, customEndpoint?: string): Promise<boolean>;
+  validateApiKey(apiKey: string, customEndpoint?: string, apiBaseUrl?: string): Promise<boolean>;
   
   /**
    * Get available models from the provider
    * @param apiKey API key for authentication
    * @param customEndpoint Optional custom endpoint for compatible providers
+   * @param apiBaseUrl Optional base URL for the API (for OpenAI)
    */
-  getAvailableModels(apiKey: string, customEndpoint?: string): Promise<string[]>;
+  getAvailableModels(apiKey: string, customEndpoint?: string, apiBaseUrl?: string): Promise<string[]>;
   
   /**
    * Test connection to the provider
@@ -34,12 +36,14 @@ export interface ModelProviderInterface {
    * @param model Model to test
    * @param testMessage Test message to send
    * @param customEndpoint Optional custom endpoint for compatible providers
+   * @param apiBaseUrl Optional base URL for the API (for OpenAI)
    */
   testConnection(
     apiKey: string, 
     model: string, 
     testMessage: string, 
-    customEndpoint?: string
+    customEndpoint?: string,
+    apiBaseUrl?: string
   ): Promise<{ success: boolean; message: string }>;
   
   /**
@@ -48,12 +52,14 @@ export interface ModelProviderInterface {
    * @param model Model to use
    * @param messages Array of messages in the conversation
    * @param customEndpoint Optional custom endpoint for compatible providers
+   * @param apiBaseUrl Optional base URL for the API (for OpenAI)
    */
   sendChatMessage(
     apiKey: string,
     model: string,
     messages: { role: string; content: string }[],
-    customEndpoint?: string
+    customEndpoint?: string,
+    apiBaseUrl?: string
   ): Promise<string>;
   
   /**
@@ -83,10 +89,10 @@ export abstract class BaseModelProvider implements ModelProviderInterface {
     return this.providerType;
   }
   
-  abstract validateApiKey(apiKey: string, customEndpoint?: string): Promise<boolean>;
-  abstract getAvailableModels(apiKey: string, customEndpoint?: string): Promise<string[]>;
-  abstract testConnection(apiKey: string, model: string, testMessage: string, customEndpoint?: string): Promise<{ success: boolean; message: string }>;
-  abstract sendChatMessage(apiKey: string, model: string, messages: { role: string; content: string }[], customEndpoint?: string): Promise<string>;
+  abstract validateApiKey(apiKey: string, customEndpoint?: string, apiBaseUrl?: string): Promise<boolean>;
+  abstract getAvailableModels(apiKey: string, customEndpoint?: string, apiBaseUrl?: string): Promise<string[]>;
+  abstract testConnection(apiKey: string, model: string, testMessage: string, customEndpoint?: string, apiBaseUrl?: string): Promise<{ success: boolean; message: string }>;
+  abstract sendChatMessage(apiKey: string, model: string, messages: { role: string; content: string }[], customEndpoint?: string, apiBaseUrl?: string): Promise<string>;
   abstract getDefaultModels(): string[];
 }
 

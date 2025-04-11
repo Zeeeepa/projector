@@ -33,6 +33,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [customEndpoint, setCustomEndpoint] = useState('');
   const [baseApiEndpoint, setBaseApiEndpoint] = useState('');
+  const [apiBaseUrlInput, setApiBaseUrlInput] = useState('');
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
   const [isCompatibleProvider, setIsCompatibleProvider] = useState(false);
   
@@ -60,6 +61,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         setAiProvider(activeConfig.aiProvider);
         setCustomEndpoint(activeConfig.customEndpoint || '');
         setIsCompatibleProvider(!!activeConfig.isCompatibleProvider);
+        setApiBaseUrlInput(activeConfig.apiBaseUrl || '');
         
         if (activeConfig.customEndpoint) {
           const endpointParts = activeConfig.customEndpoint.split('/v1');
@@ -90,6 +92,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setAiProvider('openai');
     setCustomEndpoint('');
     setBaseApiEndpoint('');
+    setApiBaseUrlInput('');
     setIsCompatibleProvider(false);
     setTestResult(null);
   };
@@ -139,7 +142,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       aiProvider,
       customEndpoint: endpointToSave || undefined,
       isVerified: testResult?.success || false,
-      isCompatibleProvider
+      isCompatibleProvider,
+      apiBaseUrl: apiBaseUrlInput || undefined
     };
     
     if (editingConfigId) {
@@ -584,6 +588,25 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         placeholder="Enter your API key"
                       />
                     </div>
+                    
+                    {aiProvider === 'openai' && (
+                      <div>
+                        <label htmlFor="apiBaseUrlInput" className="block text-sm font-medium text-gray-300">
+                          API Base URL (Optional)
+                        </label>
+                        <input
+                          type="url"
+                          id="apiBaseUrlInput"
+                          value={apiBaseUrlInput}
+                          onChange={(e) => setApiBaseUrlInput(e.target.value)}
+                          className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                          placeholder="https://api.openai.com"
+                        />
+                        <p className="mt-1 text-xs text-gray-400">
+                          Custom base URL for OpenAI API (leave empty for default)
+                        </p>
+                      </div>
+                    )}
                     
                     {aiProvider === 'openai_compatible' && isCompatibleProvider && (
                       <div>

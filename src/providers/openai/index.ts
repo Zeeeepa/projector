@@ -24,12 +24,13 @@ export class OpenAIProvider extends BaseModelProvider {
   /**
    * Validate OpenAI API key
    */
-  async validateApiKey(apiKey: string): Promise<boolean> {
+  async validateApiKey(apiKey: string, customEndpoint?: string, apiBaseUrl?: string): Promise<boolean> {
     if (!apiKey) return false;
     
     try {
       // Make a minimal API call to validate the key
-      const response = await fetch('https://api.openai.com/v1/models', {
+      const baseUrl = apiBaseUrl || 'https://api.openai.com';
+      const response = await fetch(`${baseUrl}/v1/models`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`
@@ -46,13 +47,14 @@ export class OpenAIProvider extends BaseModelProvider {
   /**
    * Get available models from OpenAI
    */
-  async getAvailableModels(apiKey: string): Promise<string[]> {
+  async getAvailableModels(apiKey: string, customEndpoint?: string, apiBaseUrl?: string): Promise<string[]> {
     if (!apiKey) {
       throw new ProviderApiError('API key is required');
     }
     
     try {
-      const response = await fetch('https://api.openai.com/v1/models', {
+      const baseUrl = apiBaseUrl || 'https://api.openai.com';
+      const response = await fetch(`${baseUrl}/v1/models`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`
@@ -86,7 +88,7 @@ export class OpenAIProvider extends BaseModelProvider {
   /**
    * Test connection to OpenAI API
    */
-  async testConnection(apiKey: string, model: string, testMessage: string): Promise<{ success: boolean; message: string }> {
+  async testConnection(apiKey: string, model: string, testMessage: string, customEndpoint?: string, apiBaseUrl?: string): Promise<{ success: boolean; message: string }> {
     if (!apiKey) {
       return { success: false, message: 'API key is required' };
     }
@@ -96,7 +98,8 @@ export class OpenAIProvider extends BaseModelProvider {
     }
     
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const baseUrl = apiBaseUrl || 'https://api.openai.com';
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -137,7 +140,9 @@ export class OpenAIProvider extends BaseModelProvider {
   async sendChatMessage(
     apiKey: string,
     model: string,
-    messages: { role: string; content: string }[]
+    messages: { role: string; content: string }[],
+    customEndpoint?: string,
+    apiBaseUrl?: string
   ): Promise<string> {
     if (!apiKey) {
       throw new ProviderApiError('API key is required');
@@ -148,7 +153,8 @@ export class OpenAIProvider extends BaseModelProvider {
     }
     
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const baseUrl = apiBaseUrl || 'https://api.openai.com';
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
