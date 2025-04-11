@@ -33,7 +33,8 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       const response = await fetch(`${customEndpoint}/models`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
         }
       });
       
@@ -56,12 +57,15 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       const response = await fetch(`${customEndpoint}/models`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
         }
       });
       
       if (!response.ok) {
-        throw new ProviderApiError(`API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        throw new ProviderApiError(`API error: ${response.status} - ${errorText}`);
       }
       
       const data = await response.json();
@@ -95,6 +99,8 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
     }
     
     try {
+      console.log(`Testing connection to ${customEndpoint} with model ${model}`);
+      
       const response = await fetch(`${customEndpoint}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -110,8 +116,21 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       });
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new ProviderApiError(errorData.error?.message || `API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        
+        let errorMessage = `API error: ${response.status}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error?.message) {
+            errorMessage = errorData.error.message;
+          }
+        } catch (e) {
+          // If parsing fails, use the raw error text
+          errorMessage += ` - ${errorText}`;
+        }
+        
+        throw new ProviderApiError(errorMessage);
       }
       
       const data = await response.json();
@@ -137,13 +156,15 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
     apiKey: string,
     model: string,
     messages: { role: string; content: string }[],
-    customEndpoint?: string
+    customEndpoint?: string,
+    apiBaseUrl?: string
   ): Promise<string> {
     if (!apiKey) {
       throw new ProviderApiError('API key is required');
     }
     
-    if (!customEndpoint) {
+    const endpoint = customEndpoint || apiBaseUrl;
+    if (!endpoint) {
       throw new ProviderApiError('API endpoint is required');
     }
     
@@ -152,7 +173,9 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
     }
     
     try {
-      const response = await fetch(`${customEndpoint}/chat/completions`, {
+      console.log(`Sending message to ${endpoint}/chat/completions with model ${model}`);
+      
+      const response = await fetch(`${endpoint}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,8 +190,21 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       });
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new ProviderApiError(errorData.error?.message || `API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        
+        let errorMessage = `API error: ${response.status}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error?.message) {
+            errorMessage = errorData.error.message;
+          }
+        } catch (e) {
+          // If parsing fails, use the raw error text
+          errorMessage += ` - ${errorText}`;
+        }
+        
+        throw new ProviderApiError(errorMessage);
       }
       
       const data = await response.json();
