@@ -38,7 +38,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'ai' | 'github'>('ai');
+  const [activeTab, setActiveTab] = useState<'saved_configs' | 'new_config' | 'github'>('saved_configs');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [providerNames, setProviderNames] = useState<{ type: AIProvider; name: string }[]>([]);
@@ -149,6 +149,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     }
     
     resetConfigForm();
+    setActiveTab('saved_configs');
   };
 
   const handleDeleteConfig = (id: string) => {
@@ -177,6 +178,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     }
     
     setTestResult(config.isVerified ? { success: true, message: 'Configuration verified' } : null);
+    
+    setActiveTab('new_config');
   };
 
   const handleSetActiveConfig = (id: string) => {
@@ -253,6 +256,10 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         }
       } catch (error) {
         console.error('Error validating API key:', error);
+        setTestResult({
+          success: false,
+          message: error instanceof Error ? error.message : 'Failed to validate API key'
+        });
       } finally {
         setIsValidatingKey(false);
       }
@@ -334,38 +341,19 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setTestResult(null);
     
     try {
-      const modelToTest = isCompatibleProvider ? customModelInput : model;
-      
-      let endpointToTest = customEndpoint;
-      if (aiProvider === 'openai_compatible' && isCompatibleProvider && baseApiEndpoint) {
-        endpointToTest = baseApiEndpoint;
-        if (!endpointToTest.endsWith('/v1')) {
-          if (endpointToTest.endsWith('/')) {
-            endpointToTest = endpointToTest.slice(0, -1);
-          }
-          endpointToTest += '/v1';
-        }
-      }
-      
       const result = await apiService.testAIConfig({
-        apiKey,
-        model: modelToTest,
         aiProvider,
-        customEndpoint: needsCustomEndpoint(aiProvider) ? endpointToTest : undefined,
-        name: configName,
+        apiKey,
+        model: isCompatibleProvider ? customModelInput : model,
+        customEndpoint: needsCustomEndpoint(aiProvider) ? customEndpoint : undefined,
         isCompatibleProvider
       });
       
       setTestResult(result);
-      
-      if (editingConfigId && result.success) {
-        updateAIConfig(editingConfigId, { isVerified: true });
-      }
-    } catch (err) {
-      console.error('Error testing connection:', err);
+    } catch (error) {
       setTestResult({
         success: false,
-        message: err instanceof Error ? err.message : 'Failed to connect to API'
+        message: error instanceof Error ? error.message : 'Failed to test connection'
       });
     } finally {
       setIsTesting(false);
@@ -376,94 +364,166 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl p-6 border border-gray-700 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-semibold text-gray-100 mb-4">Settings</h2>
-        
-        <div className="mb-4 flex border-b border-gray-700">
-          <button
-            className={`px-4 py-2 font-medium ${activeTab === 'ai' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200'}`}
-            onClick={() => setActiveTab('ai')}
-          >
-            AI Settings
-          </button>
-          <button
-            className={`px-4 py-2 font-medium ${activeTab === 'github' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200'}`}
-            onClick={() => setActiveTab('github')}
-          >
-            GitHub Settings
-          </button>
-        </div>
-        
+      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            {activeTab === 'ai' && (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-gray-200">Saved Configurations</h3>
-                    
-                    {aiConfigs.length === 0 ? (
-                      <div className="text-gray-400 text-sm p-4 border border-gray-700 rounded-md">
-                        No AI configurations saved yet. Create one using the form on the right.
-                      </div>
-                    ) : (
-                      <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-                        {aiConfigs.map((config) => (
-                          <div 
-                            key={config.id} 
-                            className={`p-3 border rounded-md flex justify-between items-center ${
-                              config.id === activeAIConfigId 
-                                ? 'border-blue-500 bg-blue-900 bg-opacity-20' 
-                                : 'border-gray-700 hover:border-gray-500'
-                            }`}
-                          >
-                            <div>
-                              <div className="font-medium text-gray-200">{config.name}</div>
-                              <div className="text-xs text-gray-400">
-                                {config.aiProvider} | {config.model}
-                                {config.isVerified && (
-                                  <span className="ml-2 text-green-400">✓ Verified</span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex space-x-2">
-                              <button
-                                type="button"
-                                onClick={() => handleSetActiveConfig(config.id)}
-                                className={`px-2 py-1 text-xs rounded ${
-                                  config.id === activeAIConfigId
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                }`}
-                              >
-                                {config.id === activeAIConfigId ? 'Active' : 'Use'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleEditConfig(config)}
-                                className="px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteConfig(config.id)}
-                                className="px-2 py-1 text-xs bg-red-900 text-red-300 rounded hover:bg-red-800"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+          <div className="p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-medium text-gray-100">Settings</h3>
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-100"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="border-b border-gray-700">
+              <nav className="-mb-px flex space-x-6">
+                <button
+                  type="button"
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'saved_configs'
+                      ? 'border-indigo-500 text-indigo-400'
+                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
+                  }`}
+                  onClick={() => setActiveTab('saved_configs')}
+                >
+                  Saved AI Configurations
+                </button>
+                <button
+                  type="button"
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'new_config'
+                      ? 'border-indigo-500 text-indigo-400'
+                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
+                  }`}
+                  onClick={() => {
+                    setActiveTab('new_config');
+                    if (!editingConfigId) {
+                      resetConfigForm();
+                    }
+                  }}
+                >
+                  {editingConfigId ? 'Edit Configuration' : 'New Configuration'}
+                </button>
+                <button
+                  type="button"
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'github'
+                      ? 'border-indigo-500 text-indigo-400'
+                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
+                  }`}
+                  onClick={() => setActiveTab('github')}
+                >
+                  GitHub Settings
+                </button>
+              </nav>
+            </div>
+            
+            {activeTab === 'saved_configs' && (
+              <div className="space-y-4">
+                <h4 className="text-lg font-medium text-gray-200">Saved AI Configurations</h4>
+                
+                {aiConfigs.length === 0 ? (
+                  <div className="text-center py-4 text-gray-400">
+                    <p>No AI configurations saved yet.</p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('new_config')}
+                      className="mt-2 text-indigo-400 hover:text-indigo-300"
+                    >
+                      Create your first configuration
+                    </button>
                   </div>
+                ) : (
+                  <div className="space-y-3">
+                    {aiConfigs.map((config) => (
+                      <div 
+                        key={config.id} 
+                        className={`p-3 rounded-md border ${
+                          activeAIConfigId === config.id 
+                            ? 'border-indigo-500 bg-gray-800' 
+                            : 'border-gray-700 bg-gray-900 hover:bg-gray-800'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h5 className="font-medium text-gray-200 flex items-center">
+                              {config.name}
+                              {config.isVerified && (
+                                <span className="ml-2 text-green-400 text-xs">✓ Verified</span>
+                              )}
+                              {activeAIConfigId === config.id && (
+                                <span className="ml-2 text-indigo-400 text-xs">Active</span>
+                              )}
+                            </h5>
+                            <p className="text-sm text-gray-400">
+                              {config.aiProvider} • {config.model}
+                            </p>
+                            {config.customEndpoint && (
+                              <p className="text-xs text-gray-500 truncate max-w-xs">
+                                {config.customEndpoint}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSetActiveConfig(config.id)}
+                              className={`px-2 py-1 text-xs rounded-md ${
+                                activeAIConfigId === config.id
+                                  ? 'bg-indigo-700 text-indigo-200 cursor-default'
+                                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                              }`}
+                              disabled={activeAIConfigId === config.id}
+                            >
+                              {activeAIConfigId === config.id ? 'Active' : 'Set Active'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEditConfig(config)}
+                              className="px-2 py-1 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-600"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteConfig(config.id)}
+                              className="px-2 py-1 text-xs bg-red-800 text-white rounded-md hover:bg-red-700"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetConfigForm();
+                        setActiveTab('new_config');
+                      }}
+                      className="w-full py-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 border border-dashed border-gray-700 rounded-md hover:border-gray-600"
+                    >
+                      + Add New Configuration
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {activeTab === 'new_config' && (
+              <>
+                <div className="space-y-4">
+                  <h4 className="text-lg font-medium text-gray-200">
+                    {editingConfigId ? 'Edit Configuration' : 'New AI Configuration'}
+                  </h4>
                   
                   <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-gray-200">
-                      {editingConfigId ? 'Edit Configuration' : 'New Configuration'}
-                    </h3>
-                    
                     <div>
                       <label htmlFor="configName" className="block text-sm font-medium text-gray-300">
                         Configuration Name
@@ -474,7 +534,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         value={configName}
                         onChange={(e) => setConfigName(e.target.value)}
                         className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="e.g., My OpenAI Config"
+                        placeholder="My Configuration"
                       />
                     </div>
                     
@@ -499,16 +559,15 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     {aiProvider === 'openai_compatible' && (
                       <div className="flex items-center">
                         <input
-                          id="isCompatibleProvider"
                           type="checkbox"
+                          id="isCompatibleProvider"
                           checked={isCompatibleProvider}
                           onChange={(e) => setIsCompatibleProvider(e.target.checked)}
                           className="h-4 w-4 rounded border-gray-700 text-indigo-600 focus:ring-indigo-500 bg-gray-800"
                         />
                         <label htmlFor="isCompatibleProvider" className="ml-2 block text-sm text-gray-300">
-                          OpenAI API Compatible
+                          OpenAI API compatible (for Anthropic, etc.)
                         </label>
-                        <span className="ml-1 text-xs text-gray-400">(e.g., Anthropic, Mistral, etc.)</span>
                       </div>
                     )}
                     
@@ -644,7 +703,10 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     {editingConfigId && (
                       <button
                         type="button"
-                        onClick={resetConfigForm}
+                        onClick={() => {
+                          resetConfigForm();
+                          setActiveTab('saved_configs');
+                        }}
                         className="w-full px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
                       >
                         Cancel Editing
