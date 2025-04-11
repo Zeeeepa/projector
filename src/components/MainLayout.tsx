@@ -7,10 +7,23 @@ import { SettingsDialog } from './SettingsDialog';
 import RequirementsManager from './RequirementsManager';
 import { useProjectStore } from '../store';
 
+// New component for PR/Branch list
+const PRBranchList: React.FC = () => {
+  return (
+    <div className="p-4">
+      <h3 className="font-semibold text-gray-200 mb-3">PRs & Branches</h3>
+      <div className="text-gray-400 text-center p-4">
+        <p>No PRs or branches available yet</p>
+      </div>
+    </div>
+  );
+};
+
 const MainLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+  const [isPRBranchDialogOpen, setIsPRBranchDialogOpen] = useState(false);
   const [activeView, setActiveView] = useState<'requirements' | 'context'>('context');
   const { projects, setActiveProject, updateProject, activeProject } = useProjectStore();
   const [concurrency, setConcurrency] = useState<number>(2);
@@ -72,6 +85,13 @@ const MainLayout: React.FC = () => {
             Settings
           </button>
           <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition">Dashboard</button>
+          {/* New PR/Branch button */}
+          <button 
+            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition"
+            onClick={() => setIsPRBranchDialogOpen(true)}
+          >
+            PR/Branch
+          </button>
         </div>
         <button 
           className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition flex items-center"
@@ -82,42 +102,13 @@ const MainLayout: React.FC = () => {
       </header>
       
       <div className="flex flex-1 overflow-hidden">
-        <div className="w-1/4 border-r border-gray-700 bg-gray-800 overflow-auto">
-          {activeProject ? (
-            <StepGuide 
-              projectId={activeProject.id}
-              steps={[]}
-            />
-          ) : (
-            <div className="p-4 text-gray-400 text-center">
-              <p>No project selected. Add a project to get started.</p>
-            </div>
-          )}
+        {/* New first panel: PRs & Branches list */}
+        <div className="w-1/5 border-r border-gray-700 bg-gray-800 overflow-auto">
+          <PRBranchList />
         </div>
         
-        <div className="flex-1 flex flex-col overflow-hidden bg-gray-800">
-          <div className="flex border-b border-gray-700 bg-gray-900">
-            {projects.length > 0 ? (
-              projects.map(project => (
-                <button 
-                  key={project.id}
-                  className={`px-4 py-2 flex items-center ${activeTab === project.id ? 'border-b-2 border-blue-500 bg-gray-800' : 'hover:bg-gray-700'}`}
-                  onClick={() => handleTabClick(project.id)}
-                >
-                  <span>{project.name}</span>
-                  <span 
-                    className="ml-2 text-gray-400 hover:text-gray-200"
-                    onClick={(e) => handleCloseTab(e, project.id)}
-                  >
-                    ×
-                  </span>
-                </button>
-              ))
-            ) : (
-              <div className="px-4 py-2 text-gray-500">No projects yet. Add a project to get started.</div>
-            )}
-          </div>
-          
+        {/* Second panel: Project Context */}
+        <div className="w-1/5 border-r border-gray-700 bg-gray-800 overflow-auto">
           <div className="flex-1 overflow-auto p-4">
             {activeProject ? (
               <>
@@ -135,18 +126,6 @@ const MainLayout: React.FC = () => {
                     >
                       Requirements
                     </button>
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <span className="font-medium text-gray-300">Concurrency</span>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      max="10" 
-                      value={concurrency}
-                      onChange={handleConcurrencyChange}
-                      className="w-16 p-1 border border-gray-600 rounded bg-gray-700 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                    />
                   </div>
                 </div>
                 
@@ -185,7 +164,22 @@ const MainLayout: React.FC = () => {
           </div>
         </div>
         
-        <div className="w-1/4 border-l border-gray-700 bg-gray-800 overflow-auto">
+        {/* Third panel: Step Guide */}
+        <div className="w-1/5 border-r border-gray-700 bg-gray-800 overflow-auto">
+          {activeProject ? (
+            <StepGuide 
+              projectId={activeProject.id}
+              steps={[]}
+            />
+          ) : (
+            <div className="p-4 text-gray-400 text-center">
+              <p>No project selected. Add a project to get started.</p>
+            </div>
+          )}
+        </div>
+        
+        {/* Fourth panel: Project Structure */}
+        <div className="w-1/5 border-l border-gray-700 bg-gray-800 overflow-auto">
           <div className="p-2">
             <h3 className="font-semibold text-gray-200 p-2">Project Structure</h3>
             {activeProject ? (
@@ -195,6 +189,46 @@ const MainLayout: React.FC = () => {
                 <p>Select a project to view its structure</p>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+      
+      {/* Project tabs */}
+      <div className="border-t border-gray-700 bg-gray-900">
+        <div className="flex border-b border-gray-700 bg-gray-900">
+          {projects.length > 0 ? (
+            projects.map(project => (
+              <button 
+                key={project.id}
+                className={`px-4 py-2 flex items-center ${activeTab === project.id ? 'border-b-2 border-blue-500 bg-gray-800' : 'hover:bg-gray-700'}`}
+                onClick={() => handleTabClick(project.id)}
+              >
+                <span>{project.name}</span>
+                <span 
+                  className="ml-2 text-gray-400 hover:text-gray-200"
+                  onClick={(e) => handleCloseTab(e, project.id)}
+                >
+                  ×
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="px-4 py-2 text-gray-500">No projects yet. Add a project to get started.</div>
+          )}
+        </div>
+        
+        {/* Concurrency control */}
+        <div className="flex justify-end p-2 bg-gray-800">
+          <div className="flex items-center space-x-2">
+            <span className="font-medium text-gray-300">Concurrency</span>
+            <input 
+              type="number" 
+              min="1" 
+              max="10" 
+              value={concurrency}
+              onChange={handleConcurrencyChange}
+              className="w-16 p-1 border border-gray-600 rounded bg-gray-700 text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+            />
           </div>
         </div>
       </div>
@@ -212,6 +246,24 @@ const MainLayout: React.FC = () => {
         isOpen={isSettingsDialogOpen}
         onClose={() => setIsSettingsDialogOpen(false)}
       />
+      
+      {/* Placeholder for PR/Branch dialog - will be implemented later */}
+      {isPRBranchDialogOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h2 className="text-xl font-bold mb-4">PR/Branch Management</h2>
+            <p className="text-gray-300 mb-4">This feature will be implemented in the next phase.</p>
+            <div className="flex justify-end">
+              <button 
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                onClick={() => setIsPRBranchDialogOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
