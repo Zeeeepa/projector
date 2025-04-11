@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useProjectStore } from '../store';
 import { AIProvider, AIConfig } from '../types';
 import { apiService } from '../services/api';
-import { providerRegistry } from '../providers';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -27,20 +26,35 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [configName, setConfigName] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
-  const [aiProvider, setAiProvider] = useState<AIProvider>('Open_AI');
+  const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [customEndpoint, setCustomEndpoint] = useState('');
+  const [isCompatibleProvider, setIsCompatibleProvider] = useState(false);
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
   
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [testMessage, setTestMessage] = useState('Hello, can you hear me?');
   const [activeTab, setActiveTab] = useState<'ai' | 'github'>('ai');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
-  const [providerNames, setProviderNames] = useState<{ type: AIProvider; name: string }[]>([]);
+  const [providerNames, setProviderNames] = useState<{ id: string; name: string }[]>([]);
+  const [isValidatingKey, setIsValidatingKey] = useState(false);
 
   useEffect(() => {
-    setProviderNames(providerRegistry.getProviderNames());
+    const fetchProviders = async () => {
+      try {
+        const providers = await apiService.getProviders();
+        setProviderNames(providers);
+      } catch (error) {
+        console.error('Error fetching providers:', error);
+        setProviderNames([
+          { id: 'openai', name: 'OpenAI' },
+          { id: 'anthropic', name: 'Anthropic' },
+          { id: 'openai_compatible', name: 'OpenAI Compatible' }
+        ]);
+      }
+    };
+    
+    fetchProviders();
   }, []);
 
   useEffect(() => {
@@ -53,19 +67,36 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         setModel(activeConfig.model);
         setAiProvider(activeConfig.aiProvider);
         setCustomEndpoint(activeConfig.customEndpoint || '');
+        setIsCompatibleProvider(activeConfig.isCompatibleProvider || false);
       }
     } else {
       resetConfigForm();
     }
   }, [activeAIConfigId, aiConfigs]);
 
+  useEffect(() => {
+    if (aiProvider !== 'openai_compatible') {
+      setIsCompatibleProvider(false);
+    }
+    
+    setModel('');
+    setAvailableModels([]);
+  }, [aiProvider]);
+
+  useEffect(() => {
+    if (aiProvider === 'openai' && isCompatibleProvider) {
+      setAiProvider('openai_compatible');
+    }
+  }, [isCompatibleProvider]);
+
   const resetConfigForm = () => {
     setEditingConfigId(null);
     setConfigName('');
     setApiKey('');
     setModel('');
-    setAiProvider('Open_AI');
+    setAiProvider('openai');
     setCustomEndpoint('');
+    setIsCompatibleProvider(false);
     setTestResult(null);
   };
 
@@ -86,13 +117,24 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       return;
     }
     
+    if (!model) {
+      alert('Please select a model');
+      return;
+    }
+    
+    if (needsCustomEndpoint() && !customEndpoint) {
+      alert('Custom API endpoint is required for this provider');
+      return;
+    }
+    
     const configData = {
       name: configName,
       apiKey,
       model,
       aiProvider,
       customEndpoint: customEndpoint || undefined,
-      isVerified: testResult?.success || false
+      isVerified: testResult?.success || false,
+      isCompatibleProvider: isCompatibleProvider
     };
     
     if (editingConfigId) {
@@ -117,6 +159,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setModel(config.model);
     setAiProvider(config.aiProvider);
     setCustomEndpoint(config.customEndpoint || '');
+    setIsCompatibleProvider(config.isCompatibleProvider || false);
     setTestResult(config.isVerified ? { success: true, message: 'Configuration verified' } : null);
   };
 
@@ -137,36 +180,72 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       const models = await apiService.getAvailableModels(
         aiProvider,
         apiKey,
-        needsCustomEndpoint(aiProvider) ? customEndpoint : undefined
+        needsCustomEndpoint() ? customEndpoint : undefined
       );
       
       setAvailableModels(models);
     } catch (err) {
       console.error('Error fetching models:', err);
-      
-      const provider = providerRegistry.getProvider(aiProvider);
-      if (provider) {
-        setAvailableModels(provider.getDefaultModels());
-      }
+      setAvailableModels([]);
     } finally {
       setIsLoadingModels(false);
     }
   };
 
-  const needsCustomEndpoint = (provider: AIProvider): boolean => {
-    return provider === 'Open_AI_Compatible' || provider === 'DeepInfra' || provider === 'OpenRouter';
+  const needsCustomEndpoint = (): boolean => {
+    return aiProvider === 'openai_compatible' || isCompatibleProvider;
   };
 
   useEffect(() => {
-    if (apiKey && (
-      aiProvider === 'Open_AI' || 
-      aiProvider === 'Anthropic' || 
-      aiProvider === 'Nvidia' ||
-      (needsCustomEndpoint(aiProvider) && customEndpoint)
-    )) {
+    const validateApiKey = async () => {
+      if (!apiKey || isValidatingKey) return;
+      
+      setIsValidatingKey(true);
+      try {
+        const isValid = await apiService.validateApiKey(
+          aiProvider,
+          apiKey,
+          needsCustomEndpoint() ? customEndpoint : undefined
+        );
+        
+        if (isValid) {
+          setTestResult({
+            success: true,
+            message: 'API key is valid'
+          });
+          
+          fetchModels();
+        } else {
+          setTestResult({
+            success: false,
+            message: 'API key is invalid'
+          });
+        }
+      } catch (error) {
+        console.error('Error validating API key:', error);
+      } finally {
+        setIsValidatingKey(false);
+      }
+    };
+    
+    const timer = setTimeout(() => {
+      if (apiKey && (
+        aiProvider === 'openai' || 
+        aiProvider === 'anthropic' || 
+        (needsCustomEndpoint() && customEndpoint)
+      )) {
+        validateApiKey();
+      }
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, [apiKey, aiProvider, customEndpoint]);
+
+  useEffect(() => {
+    if (apiKey && needsCustomEndpoint() && customEndpoint) {
       fetchModels();
     }
-  }, [aiProvider, apiKey, customEndpoint]);
+  }, [customEndpoint]);
 
   const testConnection = async () => {
     setIsTesting(true);
@@ -177,9 +256,9 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         apiKey,
         model,
         aiProvider,
-        customEndpoint,
+        customEndpoint: needsCustomEndpoint() ? customEndpoint : undefined,
         name: configName
-      }, testMessage);
+      });
       
       setTestResult(result);
       
@@ -324,12 +403,27 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                       >
                         {providerNames.map((provider) => (
-                          <option key={provider.type} value={provider.type}>
+                          <option key={provider.id} value={provider.id}>
                             {provider.name}
                           </option>
                         ))}
                       </select>
                     </div>
+                    
+                    {aiProvider === 'openai' && (
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="isCompatibleProvider"
+                          checked={isCompatibleProvider}
+                          onChange={(e) => setIsCompatibleProvider(e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-700 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <label htmlFor="isCompatibleProvider" className="ml-2 block text-sm text-gray-300">
+                          Compatible Provider (Azure, etc.)
+                        </label>
+                      </div>
+                    )}
                     
                     <div>
                       <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300">
@@ -345,10 +439,10 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       />
                     </div>
                     
-                    {needsCustomEndpoint(aiProvider) && (
+                    {needsCustomEndpoint() && (
                       <div>
                         <label htmlFor="customEndpoint" className="block text-sm font-medium text-gray-300">
-                          Custom API Endpoint
+                          Base API Endpoint
                         </label>
                         <input
                           type="url"
@@ -356,10 +450,10 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                           value={customEndpoint}
                           onChange={(e) => setCustomEndpoint(e.target.value)}
                           className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                          placeholder="https://your-api-endpoint.com/v1/chat/completions"
+                          placeholder="https://your-api-endpoint.com/v1"
                         />
                         <p className="mt-1 text-xs text-gray-400">
-                          Full URL to the chat completions endpoint (e.g., https://api.example.com/v1/chat/completions)
+                          Base URL for the API (e.g., https://api.example.com/v1)
                         </p>
                       </div>
                     )}
@@ -393,23 +487,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       )}
                     </div>
                     
-                    <div>
-                      <label htmlFor="testMessage" className="block text-sm font-medium text-gray-300">
-                        Test Message
-                      </label>
-                      <input
-                        type="text"
-                        id="testMessage"
-                        value={testMessage}
-                        onChange={(e) => setTestMessage(e.target.value)}
-                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="Enter a test message for the API"
-                      />
-                      <p className="mt-1 text-xs text-gray-400">
-                        This message will be sent to test the API connection
-                      </p>
-                    </div>
-                    
                     {testResult && (
                       <div className={`p-3 rounded-md ${testResult.success ? 'bg-green-900 text-green-100' : 'bg-red-900 text-red-100'}`}>
                         {testResult.message}
@@ -423,7 +500,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white flex-1 ${
                           isTesting ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
                         }`}
-                        disabled={isTesting || (!apiKey) || (needsCustomEndpoint(aiProvider) && !customEndpoint)}
+                        disabled={isTesting || (!apiKey) || (needsCustomEndpoint() && !customEndpoint) || !model}
                       >
                         {isTesting ? 'Testing...' : 'Test Connection'}
                       </button>

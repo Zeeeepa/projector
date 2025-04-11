@@ -1,5 +1,4 @@
 import { Project, ChatMessage, APISettings, AIConfig, SlackConfig } from '../types';
-import { providerRegistry } from '../providers';
 
 // Default API URL - can be overridden in settings
 const DEFAULT_API_URL = 'http://localhost:8000';
@@ -384,12 +383,6 @@ export class ApiService {
       }
       
       // If backend fails, use direct API call with the active provider
-      const provider = providerRegistry.getProvider(aiProvider as any);
-      
-      if (!provider) {
-        throw new Error(`Unsupported AI provider: ${aiProvider}`);
-      }
-      
       const prompt = `You are an expert software architect and project manager. 
       
 Your task is to create a detailed project plan based on the following requirements:
@@ -409,14 +402,14 @@ Format your response in Markdown.`;
       const messages = [{ role: 'user', content: prompt }];
       const customEndpoint = this.activeConfig?.customEndpoint || this.customEndpoint || undefined;
       
-      const aiResponse = await provider.sendChatMessage(apiKey, model, messages, customEndpoint);
+      const response = await this.sendChatMessage(prompt, projectId);
       
       // Save the plan to the backend
-      await this.savePlanToBackend(projectId, aiResponse);
+      await this.savePlanToBackend(projectId, response.response);
       
       return {
         success: true,
-        plan: aiResponse
+        plan: response.response
       };
     } catch (error) {
       console.error('Error generating plan:', error);
@@ -472,57 +465,75 @@ Format your response in Markdown.`;
     });
     
     try {
-      // Get the provider from the registry
-      const provider = providerRegistry.getProvider(aiProvider as any);
-      
-      if (provider) {
-        // Use the provider to send the message
-        const aiResponse = await provider.sendChatMessage(
-          apiKey || '',
-          model || '',
-          messages,
-          customEndpoint || undefined
-        );
-        
-        // Add the AI response to the chat history
-        messages.push({
-          role: 'assistant',
-          content: aiResponse
+      // Try to use the backend API first
+      try {
+        const response = await fetch(`${this.apiBaseUrl}/api/chat/`, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify({
+            project_id: projectId,
+            message,
+            chat_history: chatHistory ? chatHistory.map(msg => ({
+              role: msg.sender === 'user' ? 'user' : 'assistant',
+              content: msg.content
+            })) : undefined,
+            provider_id: aiProvider,
+            model: model,
+            api_key: apiKey,
+            custom_endpoint: customEndpoint
+          }),
         });
         
-        // Transform to our internal format
-        return {
-          response: aiResponse,
-          chat_history: messages.map(msg => ({
-            id: crypto.randomUUID(),
-            content: msg.content,
-            sender: msg.role === 'user' ? 'user' : 'ai',
-            timestamp: new Date().toISOString(),
-            projectId
-          }))
-        };
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Transform the backend response to match frontend ChatMessage type
+          return {
+            response: data.response,
+            chat_history: data.chat_history.map((msg: any) => ({
+              id: crypto.randomUUID(),
+              content: msg.content,
+              sender: msg.role === 'user' ? 'user' : 'ai',
+              timestamp: new Date().toISOString(),
+              projectId
+            }))
+          };
+        }
+      } catch (backendError) {
+        console.warn('Backend chat API failed, falling back to direct API call:', backendError);
       }
       
-      // If no provider found or direct API call fails, use the backend API
-      const response = await fetch(`${this.apiBaseUrl}/api/chat/`, {
+      // If backend fails, use direct API call
+      const response = await fetch(`${this.apiBaseUrl}/api/models/test`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({
-          project_id: projectId,
-          message,
-          chat_history: chatHistory ? chatHistory.map(msg => ({
-            role: msg.sender === 'user' ? 'user' : 'assistant',
-            content: msg.content
-          })) : undefined
+          provider_id: aiProvider,
+          api_key: apiKey,
+          model: model,
+          custom_endpoint: customEndpoint,
+          messages: messages
         }),
       });
       
-      const data = await this.handleResponse<{ response: string, chat_history: { role: string, content: string }[] }>(response);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `API error: ${response.status}`);
+      }
       
-      // Transform the backend response to match frontend ChatMessage type
+      const data = await response.json();
+      const aiResponse = data.message || "No response from AI";
+      
+      // Add the AI response to the chat history
+      messages.push({
+        role: 'assistant',
+        content: aiResponse
+      });
+      
+      // Transform to our internal format
       return {
-        response: data.response,
-        chat_history: data.chat_history.map(msg => ({
+        response: aiResponse,
+        chat_history: messages.map(msg => ({
           id: crypto.randomUUID(),
           content: msg.content,
           sender: msg.role === 'user' ? 'user' : 'ai',
@@ -539,7 +550,7 @@ Format your response in Markdown.`;
   /**
    * Test AI configuration connection
    */
-  async testAIConfig(config: Partial<AIConfig>, testMessage: string = 'Hello, can you hear me?'): Promise<{ success: boolean; message: string }> {
+  async testAIConfig(config: Partial<AIConfig>): Promise<{ success: boolean; message: string }> {
     try {
       const { aiProvider, apiKey, model, customEndpoint } = config;
       
@@ -555,15 +566,25 @@ Format your response in Markdown.`;
         throw new Error('AI provider is required');
       }
       
-      // Get the provider from the registry
-      const provider = providerRegistry.getProvider(aiProvider as any);
+      // Use the backend API to test the connection
+      const response = await fetch(`${this.apiBaseUrl}/api/models/test`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          provider_id: aiProvider,
+          api_key: apiKey,
+          model: model,
+          custom_endpoint: customEndpoint
+        }),
+      });
       
-      if (!provider) {
-        throw new Error(`Unsupported AI provider: ${aiProvider}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `API error: ${response.status}`);
       }
       
-      // Use the provider to test the connection
-      return await provider.testConnection(apiKey, model, testMessage, customEndpoint);
+      const result = await response.json();
+      return result;
     } catch (err) {
       console.error('Error testing connection:', err);
       return {
@@ -582,21 +603,85 @@ Format your response in Markdown.`;
         throw new Error('API key is required');
       }
       
-      // Get the provider from the registry
-      const provider = providerRegistry.getProvider(aiProvider as any);
+      // Use the backend API to get available models
+      const response = await fetch(`${this.apiBaseUrl}/api/models/available`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          provider_id: aiProvider,
+          api_key: apiKey,
+          custom_endpoint: customEndpoint
+        }),
+      });
       
-      if (!provider) {
-        throw new Error(`Unsupported AI provider: ${aiProvider}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `API error: ${response.status}`);
       }
       
-      // Use the provider to get available models
-      return await provider.getAvailableModels(apiKey, customEndpoint);
+      const data = await response.json();
+      return data.models || [];
     } catch (error) {
       console.error('Error fetching models:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all available providers
+   */
+  async getProviders(): Promise<{ id: string; name: string }[]> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/api/models/providers`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
       
-      // Get default models for the provider
-      const provider = providerRegistry.getProvider(aiProvider as any);
-      return provider ? provider.getDefaultModels() : [];
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `API error: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching providers:', error);
+      // Return default providers if API fails
+      return [
+        { id: 'openai', name: 'OpenAI' },
+        { id: 'anthropic', name: 'Anthropic' },
+        { id: 'openai_compatible', name: 'OpenAI Compatible' }
+      ];
+    }
+  }
+
+  /**
+   * Validate an API key for a provider
+   */
+  async validateApiKey(providerId: string, apiKey: string, customEndpoint?: string): Promise<boolean> {
+    try {
+      if (!apiKey) {
+        return false;
+      }
+      
+      const response = await fetch(`${this.apiBaseUrl}/api/models/validate`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          provider_id: providerId,
+          api_key: apiKey,
+          custom_endpoint: customEndpoint
+        }),
+      });
+      
+      if (!response.ok) {
+        return false;
+      }
+      
+      const data = await response.json();
+      return data.valid || false;
+    } catch (error) {
+      console.error('Error validating API key:', error);
+      return false;
     }
   }
 

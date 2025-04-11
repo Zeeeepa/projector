@@ -8,6 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
+# Import routes
+from .routes import models
+
 # Load environment variables with explicit encoding
 try:
     load_dotenv(encoding="utf-8")
@@ -48,6 +51,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(models.router, prefix="/api")
 
 # Define models
 class Project(BaseModel):
