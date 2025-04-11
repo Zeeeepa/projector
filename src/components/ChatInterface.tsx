@@ -83,9 +83,11 @@ export function ChatInterface() {
       if (selectedAIConfigId) {
         const config = aiConfigs.find(c => c.id === selectedAIConfigId);
         if (config) {
+          console.log("Using AI config:", config.name, config.aiProvider);
           apiService.setActiveConfig(config);
         }
       } else {
+        console.log("Using global settings:", apiSettings.aiProvider);
         apiService.setActiveConfig(null);
         apiService.updateSettings(apiSettings);
       }
@@ -114,16 +116,20 @@ export function ChatInterface() {
         }
       }
 
-      try {
-        const filteredMessages = selectedProjectId 
-          ? messages.filter(msg => !msg.projectId || msg.projectId === selectedProjectId)
-          : messages;
+      const filteredMessages = selectedProjectId 
+        ? messages.filter(msg => !msg.projectId || msg.projectId === selectedProjectId)
+        : messages;
 
+      try {
+        console.log("Sending chat message with context:", contextPrompt ? "Yes" : "No");
+        
         const response = await apiService.sendChatMessage(
           contextPrompt + message,
           selectedProjectId || undefined,
           filteredMessages
         );
+
+        console.log("Received response:", response);
 
         addMessage({
           content: response.response,

@@ -12,7 +12,7 @@ export const useProjectStore = create<ProjectStore>()(
         apiBaseUrl: '',
         model: 'gpt-4',
         githubToken: '',
-        aiProvider: 'openai',
+        aiProvider: 'openai_compatible',
         customEndpoint: '',
       },
       aiConfigs: [],
