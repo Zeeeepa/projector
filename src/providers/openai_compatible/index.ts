@@ -25,7 +25,7 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
   /**
    * Validate OpenAI Compatible API key
    */
-  async validateApiKey(apiKey: string, customEndpoint?: string): Promise<boolean> {
+  async validateApiKey(apiKey: string, customEndpoint?: string, apiBaseUrl?: string): Promise<boolean> {
     if (!apiKey || !customEndpoint) return false;
     
     try {
@@ -47,7 +47,7 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
   /**
    * Get available models from OpenAI Compatible API
    */
-  async getAvailableModels(apiKey: string, customEndpoint?: string): Promise<string[]> {
+  async getAvailableModels(apiKey: string, customEndpoint?: string, apiBaseUrl?: string): Promise<string[]> {
     if (!apiKey || !customEndpoint) {
       throw new ProviderApiError('API key and endpoint are required');
     }
@@ -81,7 +81,13 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
   /**
    * Test connection to OpenAI Compatible API
    */
-  async testConnection(apiKey: string, model: string, testMessage: string, customEndpoint?: string): Promise<{ success: boolean; message: string }> {
+  async testConnection(
+    apiKey: string, 
+    model: string, 
+    testMessage: string, 
+    customEndpoint?: string,
+    apiBaseUrl?: string
+  ): Promise<{ success: boolean; message: string }> {
     if (!apiKey) {
       return { success: false, message: 'API key is required' };
     }
@@ -137,7 +143,8 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
     apiKey: string,
     model: string,
     messages: { role: string; content: string }[],
-    customEndpoint?: string
+    customEndpoint?: string,
+    apiBaseUrl?: string
   ): Promise<string> {
     if (!apiKey) {
       throw new ProviderApiError('API key is required');
