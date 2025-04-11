@@ -23,16 +23,37 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
   }
   
   /**
+   * Format endpoint URL to ensure it has the correct structure
+   */
+  private formatEndpoint(endpoint: string): string {
+    if (!endpoint) return '';
+    
+    let formattedEndpoint = endpoint;
+    // Remove trailing slash if present
+    if (formattedEndpoint.endsWith('/')) {
+      formattedEndpoint = formattedEndpoint.slice(0, -1);
+    }
+    
+    // Add /v1 if not already present
+    if (!formattedEndpoint.endsWith('/v1')) {
+      formattedEndpoint += '/v1';
+    }
+    
+    return formattedEndpoint;
+  }
+  
+  /**
    * Validate OpenAI Compatible API key
    */
   async validateApiKey(apiKey: string, customEndpoint?: string): Promise<boolean> {
     if (!apiKey || !customEndpoint) return false;
     
     try {
-      console.log(`Validating OpenAI Compatible API key with endpoint: ${customEndpoint}`);
+      const formattedEndpoint = this.formatEndpoint(customEndpoint);
+      console.log(`Validating OpenAI Compatible API key with endpoint: ${formattedEndpoint}`);
       
       // Make a minimal API call to validate the key
-      const response = await fetch(`${customEndpoint}/models`, {
+      const response = await fetch(`${formattedEndpoint}/models`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -43,9 +64,10 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`API validation error (${response.status}):`, errorText);
+        return false;
       }
       
-      return response.ok;
+      return true;
     } catch (error) {
       console.error('Error validating OpenAI Compatible API key:', error);
       return false;
@@ -61,9 +83,10 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
     }
     
     try {
-      console.log(`Fetching models from OpenAI Compatible API: ${customEndpoint}`);
+      const formattedEndpoint = this.formatEndpoint(customEndpoint);
+      console.log(`Fetching models from OpenAI Compatible API: ${formattedEndpoint}`);
       
-      const response = await fetch(`${customEndpoint}/models`, {
+      const response = await fetch(`${formattedEndpoint}/models`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -109,20 +132,10 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
     }
     
     try {
-      console.log(`Testing connection to ${customEndpoint} with model ${model}`);
+      const formattedEndpoint = this.formatEndpoint(customEndpoint);
+      console.log(`Testing connection to ${formattedEndpoint} with model ${model}`);
       
-      // Ensure the endpoint has the correct format
-      let endpoint = customEndpoint;
-      if (!endpoint.endsWith('/v1') && !endpoint.endsWith('/v1/')) {
-        if (endpoint.endsWith('/')) {
-          endpoint = endpoint.slice(0, -1);
-        }
-        endpoint += '/v1';
-      }
-      
-      console.log(`Using formatted endpoint: ${endpoint}`);
-      
-      const response = await fetch(`${endpoint}/chat/completions`, {
+      const response = await fetch(`${formattedEndpoint}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -194,14 +207,7 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
     }
     
     try {
-      // Ensure the endpoint has the correct format
-      let formattedEndpoint = endpoint;
-      if (!formattedEndpoint.endsWith('/v1') && !formattedEndpoint.endsWith('/v1/')) {
-        if (formattedEndpoint.endsWith('/')) {
-          formattedEndpoint = formattedEndpoint.slice(0, -1);
-        }
-        formattedEndpoint += '/v1';
-      }
+      const formattedEndpoint = this.formatEndpoint(endpoint);
       
       console.log(`Sending message to ${formattedEndpoint}/chat/completions with model ${model}`);
       console.log('Messages:', JSON.stringify(messages));

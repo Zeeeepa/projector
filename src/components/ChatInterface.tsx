@@ -80,16 +80,30 @@ export function ChatInterface() {
     setIsLoading(true);
 
     try {
+      let activeConfig = null;
       if (selectedAIConfigId) {
-        const config = aiConfigs.find(c => c.id === selectedAIConfigId);
-        if (config) {
-          console.log("Using AI config:", config.name, config.aiProvider);
-          apiService.setActiveConfig(config);
+        activeConfig = aiConfigs.find(c => c.id === selectedAIConfigId);
+        if (activeConfig) {
+          console.log("Using AI config:", activeConfig.name, activeConfig.aiProvider);
+          apiService.setActiveConfig(activeConfig);
         }
       } else {
         console.log("Using global settings:", apiSettings.aiProvider);
         apiService.setActiveConfig(null);
         apiService.updateSettings(apiSettings);
+      }
+
+      const config = activeConfig || apiSettings;
+      if (!config.apiKey) {
+        throw new Error('API key is required. Please configure it in Settings.');
+      }
+      
+      if (!config.model) {
+        throw new Error('Model is required. Please configure it in Settings.');
+      }
+      
+      if (config.aiProvider === 'openai_compatible' && !config.customEndpoint) {
+        throw new Error('API endpoint is required for OpenAI compatible provider. Please configure it in Settings.');
       }
 
       let contextPrompt = '';
@@ -122,6 +136,8 @@ export function ChatInterface() {
 
       try {
         console.log("Sending chat message with context:", contextPrompt ? "Yes" : "No");
+        console.log("Using provider:", config.aiProvider);
+        console.log("Using model:", config.model);
         
         const response = await apiService.sendChatMessage(
           contextPrompt + message,
