@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useChatStore, useProjectStore } from '../store';
 import { apiService } from '../services/api';
-import { Project } from '../types';
 
 export function ChatInterface() {
   const [message, setMessage] = useState('');
@@ -65,6 +64,22 @@ export function ChatInterface() {
     }
   };
 
+  const validateConfig = (config: any) => {
+    if (!config.apiKey) {
+      throw new Error('API key is required. Please configure it in Settings.');
+    }
+    
+    if (!config.model) {
+      throw new Error('Model is required. Please configure it in Settings.');
+    }
+    
+    if (config.aiProvider === 'openai_compatible' && !config.customEndpoint) {
+      throw new Error('API endpoint is required for OpenAI compatible provider. Please configure it in Settings.');
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
@@ -94,17 +109,7 @@ export function ChatInterface() {
       }
 
       const config = activeConfig || apiSettings;
-      if (!config.apiKey) {
-        throw new Error('API key is required. Please configure it in Settings.');
-      }
-      
-      if (!config.model) {
-        throw new Error('Model is required. Please configure it in Settings.');
-      }
-      
-      if (config.aiProvider === 'openai_compatible' && !config.customEndpoint) {
-        throw new Error('API endpoint is required for OpenAI compatible provider. Please configure it in Settings.');
-      }
+      validateConfig(config);
 
       let contextPrompt = '';
       if (selectedProjectId) {
@@ -138,6 +143,10 @@ export function ChatInterface() {
         console.log("Sending chat message with context:", contextPrompt ? "Yes" : "No");
         console.log("Using provider:", config.aiProvider);
         console.log("Using model:", config.model);
+        
+        if (config.aiProvider === 'openai_compatible') {
+          console.log("Using OpenAI compatible endpoint:", config.customEndpoint);
+        }
         
         const response = await apiService.sendChatMessage(
           contextPrompt + message,
