@@ -9,10 +9,10 @@ export const useProjectStore = create<ProjectStore>()(
       activeProject: null,
       apiSettings: {
         apiKey: '',
-        apiBaseUrl: '',
+        apiBaseUrl: 'http://localhost:8000',
         model: 'gpt-4',
         githubToken: '',
-        aiProvider: 'openai',
+        aiProvider: 'openai_compatible',
         customEndpoint: '',
       },
       aiConfigs: [],

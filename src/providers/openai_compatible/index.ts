@@ -34,8 +34,8 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       formattedEndpoint = formattedEndpoint.slice(0, -1);
     }
     
-    // Add /v1 if not already present
-    if (!formattedEndpoint.endsWith('/v1')) {
+    // Add /v1 if not already present and doesn't already contain /v1/
+    if (!formattedEndpoint.includes('/v1/') && !formattedEndpoint.endsWith('/v1')) {
       formattedEndpoint += '/v1';
     }
     
@@ -247,7 +247,12 @@ export class OpenAICompatibleProvider extends BaseModelProvider {
       const data = await response.json();
       console.log('API response:', data);
       
-      return data.choices?.[0]?.message?.content || 'No response from AI';
+      if (!data.choices || !data.choices.length) {
+        console.error('Invalid response format:', data);
+        throw new ProviderApiError('Invalid response format from API');
+      }
+      
+      return data.choices[0]?.message?.content || 'No response from AI';
     } catch (error) {
       console.error('Error sending message to OpenAI Compatible API:', error);
       throw new ProviderApiError(error instanceof Error ? error.message : 'Failed to send message to OpenAI Compatible API');
