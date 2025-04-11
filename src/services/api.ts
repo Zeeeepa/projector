@@ -1,4 +1,5 @@
 import { Project, ChatMessage, APISettings, AIConfig, SlackConfig } from '../types';
+import { providerRegistry } from '../providers';
 
 // Default API URL - can be overridden in settings
 const DEFAULT_API_URL = 'http://localhost:8000';
@@ -332,140 +333,93 @@ export class ApiService {
       }
     } catch (err) {
       console.error('Error sending Slack message:', err);
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : 'Failed to send message to Slack'
+      return { 
+        success: false, 
+        error: err instanceof Error ? err.message : 'Failed to send Slack message'
       };
     }
+  }
+
   /**
-   * Generate a project plan based on requirements
+   * Generate a project plan
    */
-  async generateProjectPlan(projectId: string, context: string): Promise<{ success: boolean; error?: string }> {
+  async generatePlan(projectId: string, requirements: string): Promise<{ success: boolean; plan?: string; error?: string }> {
     try {
       // Use active config if available
       const aiProvider = this.activeConfig?.aiProvider || this.aiProvider;
       const apiKey = this.activeConfig?.apiKey || this.apiKey;
       const model = this.activeConfig?.model || this.model;
-      const customEndpoint = this.activeConfig?.customEndpoint || this.customEndpoint;
       
-      // If using direct AI provider, use that instead of backend
-      if (aiProvider && apiKey) {
-        const prompt = `
-You are an expert software architect and project planner. 
-Based on the following project requirements, create:
-1. A step-by-step implementation plan
-2. A high-level project structure with key components and their relationships
-
-Requirements:
-${context}
-
-Format your response as follows:
-IMPLEMENTATION_PLAN:
-1. [First step with description]
-   - [Subtask 1]
-   - [Subtask 2]
-2. [Second step with description]
-   - [Subtask 1]
-   - [Subtask 2]
-...
-
-PROJECT_STRUCTURE:
-- [Component 1]
-  - [Subcomponent 1.1]
-  - [Subcomponent 1.2]
-- [Component 2]
-  - [Subcomponent 2.1]
-...
-
-Be specific, practical, and focus on creating a realistic implementation plan.
-`;
-
-        let response;
-        let aiResponse = '';
-        
-        if (aiProvider === 'Open_AI' || aiProvider === 'Open_AI_Compatible') {
-          const endpoint = aiProvider === 'Open_AI' 
-            ? 'https://api.openai.com/v1/chat/completions'
-            : customEndpoint;
-            
-          if (!endpoint) {
-            throw new Error('No API endpoint configured');
-          }
-          
-          response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-              model: model || 'gpt-3.5-turbo',
-              messages: [{ role: 'user', content: prompt }],
-              max_tokens: 2000,
-              temperature: 0.7
-            })
-          });
-          
-          const data = await this.handleResponse<any>(response);
-          aiResponse = data.choices?.[0]?.message?.content || 'No response from AI';
-        } else if (aiProvider === 'Anthropic') {
-          response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'anthropic-version': '2023-06-01',
-              'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-              model: model || 'claude-3-haiku-20240307',
-              messages: [{ role: 'user', content: prompt }],
-              max_tokens: 2000
-            })
-          });
-          
-          const data = await this.handleResponse<any>(response);
-          aiResponse = data.content?.[0]?.text || 'No response from AI';
-        } else if (aiProvider === 'Nvidia') {
-          response = await fetch('https://api.nvidia.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-              model: model || 'llama-3-70b',
-              messages: [{ role: 'user', content: prompt }],
-              max_tokens: 2000
-            })
-          });
-          
-          const data = await this.handleResponse<any>(response);
-          aiResponse = data.choices?.[0]?.message?.content || 'No response from AI';
-        const planMatch = aiResponse.match(/IMPLEMENTATION_PLAN:([\s\S]*?)(?=PROJECT_STRUCTURE:|$)/i);
-        const structureMatch = aiResponse.match(/PROJECT_STRUCTURE:([\s\S]*?)(?=$)/i);
-        
-        const plan = planMatch ? planMatch[1].trim() : '';
-        const structure = structureMatch ? structureMatch[1].trim() : '';
-        
-        // Save the plan to the project
-        await this.savePlanToBackend(projectId, aiResponse);
-        
-        return { success: true };
+      if (!apiKey) {
+        throw new Error('API key is required');
       }
       
-      // Otherwise use the backend API
-      const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}/generate-plan`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          context
-        }),
-      });
+      if (!model) {
+        throw new Error('Model is required');
+      }
+      
+      // First try to use the backend API
+      try {
+        const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}/generate-plan`, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify({
+            requirements
+          }),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Save the plan to the backend
+          await this.savePlanToBackend(projectId, data.plan);
+          
+          return {
+            success: true,
+            plan: data.plan
+          };
+        }
+      } catch (backendError) {
+        console.warn('Backend plan generation failed, falling back to direct API call:', backendError);
+      }
+      
+      // If backend fails, use direct API call with the active provider
+      const provider = providerRegistry.getProvider(aiProvider as any);
+      
+      if (!provider) {
+        throw new Error(`Unsupported AI provider: ${aiProvider}`);
+      }
+      
+      const prompt = `You are an expert software architect and project manager. 
+      
+Your task is to create a detailed project plan based on the following requirements:
 
-      await this.handleResponse<any>(response);
-      return { success: true };
+${requirements}
+
+Please provide a comprehensive plan that includes:
+1. Project overview and goals
+2. System architecture
+3. Component breakdown
+4. Implementation phases
+5. Timeline estimates
+6. Potential challenges and mitigation strategies
+
+Format your response in Markdown.`;
+      
+      const messages = [{ role: 'user', content: prompt }];
+      const customEndpoint = this.activeConfig?.customEndpoint || this.customEndpoint || undefined;
+      
+      const aiResponse = await provider.sendChatMessage(apiKey, model, messages, customEndpoint);
+      
+      // Save the plan to the backend
+      await this.savePlanToBackend(projectId, aiResponse);
+      
+      return {
+        success: true,
+        plan: aiResponse
+      };
     } catch (error) {
-      console.error('Error generating project plan:', error);
+      console.error('Error generating plan:', error);
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to generate plan'
@@ -503,88 +457,32 @@ Be specific, practical, and focus on creating a realistic implementation plan.
     const model = this.activeConfig?.model || this.model;
     const customEndpoint = this.activeConfig?.customEndpoint || this.customEndpoint;
     
-    // If using OpenAI Compatible endpoint, use that directly
-    if ((aiProvider === 'Open_AI_Compatible' && customEndpoint) || 
-        (aiProvider === 'Open_AI' && apiKey) || 
-        (aiProvider === 'Anthropic' && apiKey) || 
-        (aiProvider === 'Nvidia' && apiKey)) {
-      try {
-        // Format the chat history for the API
-        const messages = chatHistory 
-          ? chatHistory.map(msg => ({
-              role: msg.sender === 'user' ? 'user' : 'assistant',
-              content: msg.content
-            }))
-          : [];
-        
-        // Add the new message
-        messages.push({
-          role: 'user',
-          content: message
-        });
-        
-        let response;
-        let aiResponse = '';
-        
-        if (aiProvider === 'Open_AI' || aiProvider === 'Open_AI_Compatible') {
-          const endpoint = aiProvider === 'Open_AI' 
-            ? 'https://api.openai.com/v1/chat/completions'
-            : customEndpoint;
-            
-          if (!endpoint) {
-            throw new Error('No API endpoint configured');
-          }
-          
-          response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-              model: model || 'gpt-3.5-turbo',
-              messages,
-              max_tokens: 1000,
-              temperature: 0.7
-            })
-          });
-          
-          const data = await this.handleResponse<any>(response);
-          aiResponse = data.choices?.[0]?.message?.content || 'No response from AI';
-        } else if (aiProvider === 'Anthropic') {
-          response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'anthropic-version': '2023-06-01',
-              'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-              model: model || 'claude-3-haiku-20240307',
-              messages,
-              max_tokens: 1000
-            })
-          });
-          
-          const data = await this.handleResponse<any>(response);
-          aiResponse = data.content?.[0]?.text || 'No response from AI';
-        } else if (aiProvider === 'Nvidia') {
-          response = await fetch('https://api.nvidia.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-              model: model || 'llama-3-70b',
-              messages,
-              max_tokens: 1000
-            })
-          });
-          
-          const data = await this.handleResponse<any>(response);
-          aiResponse = data.choices?.[0]?.message?.content || 'No response from AI';
-        }
+    // Format the chat history for the API
+    const messages = chatHistory 
+      ? chatHistory.map(msg => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.content
+        }))
+      : [];
+    
+    // Add the new message
+    messages.push({
+      role: 'user',
+      content: message
+    });
+    
+    try {
+      // Get the provider from the registry
+      const provider = providerRegistry.getProvider(aiProvider as any);
+      
+      if (provider) {
+        // Use the provider to send the message
+        const aiResponse = await provider.sendChatMessage(
+          apiKey || '',
+          model || '',
+          messages,
+          customEndpoint || undefined
+        );
         
         // Add the AI response to the chat history
         messages.push({
@@ -603,39 +501,39 @@ Be specific, practical, and focus on creating a realistic implementation plan.
             projectId
           }))
         };
-      } catch (error) {
-        console.error('Error using AI provider:', error);
-        throw error;
       }
+      
+      // If no provider found or direct API call fails, use the backend API
+      const response = await fetch(`${this.apiBaseUrl}/api/chat/`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          project_id: projectId,
+          message,
+          chat_history: chatHistory ? chatHistory.map(msg => ({
+            role: msg.sender === 'user' ? 'user' : 'assistant',
+            content: msg.content
+          })) : undefined
+        }),
+      });
+      
+      const data = await this.handleResponse<{ response: string, chat_history: { role: string, content: string }[] }>(response);
+      
+      // Transform the backend response to match frontend ChatMessage type
+      return {
+        response: data.response,
+        chat_history: data.chat_history.map(msg => ({
+          id: crypto.randomUUID(),
+          content: msg.content,
+          sender: msg.role === 'user' ? 'user' : 'ai',
+          timestamp: new Date().toISOString(),
+          projectId
+        }))
+      };
+    } catch (error) {
+      console.error('Error sending chat message:', error);
+      throw error;
     }
-    
-    // Otherwise use the backend API
-    const response = await fetch(`${this.apiBaseUrl}/api/chat/`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({
-        project_id: projectId,
-        message,
-        chat_history: chatHistory ? chatHistory.map(msg => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.content
-        })) : undefined
-      }),
-    });
-
-    const data = await this.handleResponse<{ response: string, chat_history: { role: string, content: string }[] }>(response);
-    
-    // Transform the backend response to match frontend ChatMessage type
-    return {
-      response: data.response,
-      chat_history: data.chat_history.map(msg => ({
-        id: crypto.randomUUID(),
-        content: msg.content,
-        sender: msg.role === 'user' ? 'user' : 'ai',
-        timestamp: new Date().toISOString(),
-        projectId
-      }))
-    };
   }
   
   /**
@@ -649,80 +547,56 @@ Be specific, practical, and focus on creating a realistic implementation plan.
         throw new Error('API key is required');
       }
       
-      let endpoint = '';
-      let headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      };
-      
-      let testBody: any = {};
-      
-      if (aiProvider === 'Open_AI' || aiProvider === 'Open_AI_Compatible') {
-        endpoint = aiProvider === 'Open_AI' 
-          ? 'https://api.openai.com/v1/chat/completions'
-          : customEndpoint || '';
-          
-        if (aiProvider === 'Open_AI_Compatible' && !endpoint) {
-          throw new Error('Custom endpoint is required for OpenAI Compatible provider');
-        }
-        
-        testBody = {
-          model: model || 'gpt-3.5-turbo',
-          messages: [{ role: 'user', content: testMessage }],
-          max_tokens: 50,
-          temperature: 0.7
-        };
-      } else if (aiProvider === 'Anthropic') {
-        endpoint = 'https://api.anthropic.com/v1/messages';
-        headers['anthropic-version'] = '2023-06-01';
-        
-        testBody = {
-          model: model || 'claude-3-haiku-20240307',
-          messages: [{ role: 'user', content: testMessage }],
-          max_tokens: 50
-        };
-      } else if (aiProvider === 'Nvidia') {
-        endpoint = 'https://api.nvidia.com/v1/chat/completions';
-        
-        testBody = {
-          model: model || 'llama-3-70b',
-          messages: [{ role: 'user', content: testMessage }],
-          max_tokens: 50
-        };
-      } else {
-        throw new Error('Unsupported AI provider');
+      if (!model) {
+        throw new Error('Model is required');
       }
       
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(testBody)
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        let aiResponse = '';
-        
-        if (aiProvider === 'Open_AI' || aiProvider === 'Open_AI_Compatible' || aiProvider === 'Nvidia') {
-          aiResponse = data.choices?.[0]?.message?.content || '';
-        } else if (aiProvider === 'Anthropic') {
-          aiResponse = data.content?.[0]?.text || '';
-        }
-        
-        return {
-          success: true,
-          message: `Connection successful! Response: "${aiResponse.substring(0, 100)}${aiResponse.length > 100 ? '...' : ''}"`
-        };
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `API error: ${response.status}`);
+      if (!aiProvider) {
+        throw new Error('AI provider is required');
       }
+      
+      // Get the provider from the registry
+      const provider = providerRegistry.getProvider(aiProvider as any);
+      
+      if (!provider) {
+        throw new Error(`Unsupported AI provider: ${aiProvider}`);
+      }
+      
+      // Use the provider to test the connection
+      return await provider.testConnection(apiKey, model, testMessage, customEndpoint);
     } catch (err) {
       console.error('Error testing connection:', err);
       return {
         success: false,
         message: err instanceof Error ? err.message : 'Failed to connect to API'
       };
+    }
+  }
+
+  /**
+   * Get available models for a provider
+   */
+  async getAvailableModels(aiProvider: string, apiKey: string, customEndpoint?: string): Promise<string[]> {
+    try {
+      if (!apiKey) {
+        throw new Error('API key is required');
+      }
+      
+      // Get the provider from the registry
+      const provider = providerRegistry.getProvider(aiProvider as any);
+      
+      if (!provider) {
+        throw new Error(`Unsupported AI provider: ${aiProvider}`);
+      }
+      
+      // Use the provider to get available models
+      return await provider.getAvailableModels(apiKey, customEndpoint);
+    } catch (error) {
+      console.error('Error fetching models:', error);
+      
+      // Get default models for the provider
+      const provider = providerRegistry.getProvider(aiProvider as any);
+      return provider ? provider.getDefaultModels() : [];
     }
   }
 

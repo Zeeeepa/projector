@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useProjectStore } from '../store';
 import { AIProvider, AIConfig } from '../types';
 import { apiService } from '../services/api';
+import { providerRegistry } from '../providers';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -36,6 +37,11 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<'ai' | 'github'>('ai');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [providerNames, setProviderNames] = useState<{ type: AIProvider; name: string }[]>([]);
+
+  useEffect(() => {
+    setProviderNames(providerRegistry.getProviderNames());
+  }, []);
 
   useEffect(() => {
     if (activeAIConfigId) {
@@ -128,74 +134,36 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setAvailableModels([]);
     
     try {
-      let endpoint = '';
-      let headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      };
+      const models = await apiService.getAvailableModels(
+        aiProvider,
+        apiKey,
+        needsCustomEndpoint(aiProvider) ? customEndpoint : undefined
+      );
       
-      if (apiKey) {
-        headers['Authorization'] = `Bearer ${apiKey}`;
-      }
-      
-      if (aiProvider === 'Open_AI') {
-        endpoint = 'https://api.openai.com/v1/models';
-      } else if (aiProvider === 'Open_AI_Compatible' && customEndpoint) {
-        const baseUrl = new URL(customEndpoint);
-        endpoint = `${baseUrl.protocol}//${baseUrl.host}/v1/models`;
-      } else if (aiProvider === 'Anthropic') {
-        setAvailableModels(['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307']);
-        setIsLoadingModels(false);
-        return;
-      } else if (aiProvider === 'Nvidia') {
-        setAvailableModels(['llama-3-70b', 'mixtral-8x7b']);
-        setIsLoadingModels(false);
-        return;
-      }
-      
-      if (!endpoint) {
-        throw new Error('Cannot determine models endpoint');
-      }
-      
-      const response = await fetch(endpoint, {
-        method: 'GET',
-        headers
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (aiProvider === 'Open_AI' || aiProvider === 'Open_AI_Compatible') {
-          const chatModels = data.data
-            .filter((model: any) => model.id.includes('gpt') || model.id.includes('llama') || model.id.includes('mistral'))
-            .map((model: any) => model.id);
-          
-          setAvailableModels(chatModels);
-        }
-      } else {
-        if (aiProvider === 'Open_AI') {
-          setAvailableModels(['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo']);
-        } else if (aiProvider === 'Open_AI_Compatible') {
-          setAvailableModels(['llama-3-8b', 'llama-3-70b', 'mistral-7b', 'mixtral-8x7b']);
-        }
-      }
+      setAvailableModels(models);
     } catch (err) {
       console.error('Error fetching models:', err);
-      if (aiProvider === 'Open_AI') {
-        setAvailableModels(['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo']);
-      } else if (aiProvider === 'Open_AI_Compatible') {
-        setAvailableModels(['llama-3-8b', 'llama-3-70b', 'mistral-7b', 'mixtral-8x7b']);
-      } else if (aiProvider === 'Anthropic') {
-        setAvailableModels(['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307']);
-      } else if (aiProvider === 'Nvidia') {
-        setAvailableModels(['llama-3-70b', 'mixtral-8x7b']);
+      
+      const provider = providerRegistry.getProvider(aiProvider);
+      if (provider) {
+        setAvailableModels(provider.getDefaultModels());
       }
     } finally {
       setIsLoadingModels(false);
     }
   };
 
+  const needsCustomEndpoint = (provider: AIProvider): boolean => {
+    return provider === 'Open_AI_Compatible' || provider === 'DeepInfra' || provider === 'OpenRouter';
+  };
+
   useEffect(() => {
-    if (apiKey && (aiProvider === 'Open_AI' || (aiProvider === 'Open_AI_Compatible' && customEndpoint))) {
+    if (apiKey && (
+      aiProvider === 'Open_AI' || 
+      aiProvider === 'Anthropic' || 
+      aiProvider === 'Nvidia' ||
+      (needsCustomEndpoint(aiProvider) && customEndpoint)
+    )) {
       fetchModels();
     }
   }, [aiProvider, apiKey, customEndpoint]);
@@ -288,7 +256,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                                   </span>
                                 )}
                               </div>
-                              <div className="text-xs text-gray-400 mt-1">
+                              <div className="text-sm text-gray-400 mt-1">
                                 {config.aiProvider} • {config.model}
                               </div>
                             </div>
@@ -296,7 +264,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                               <button
                                 type="button"
                                 onClick={() => handleSetActiveConfig(config.id)}
-                                className={`text-xs px-2 py-1 rounded ${
+                                className={`px-2 py-1 text-xs rounded ${
                                   activeAIConfigId === config.id
                                     ? 'bg-blue-700 text-blue-100 cursor-default'
                                     : 'bg-blue-600 text-blue-100 hover:bg-blue-500'
@@ -308,14 +276,14 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                               <button
                                 type="button"
                                 onClick={() => handleEditConfig(config)}
-                                className="text-xs px-2 py-1 bg-gray-600 text-gray-100 rounded hover:bg-gray-500"
+                                className="px-2 py-1 text-xs bg-gray-600 text-gray-100 rounded hover:bg-gray-500"
                               >
                                 Edit
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteConfig(config.id)}
-                                className="text-xs px-2 py-1 bg-red-600 text-red-100 rounded hover:bg-red-500"
+                                className="px-2 py-1 text-xs bg-red-600 text-red-100 rounded hover:bg-red-500"
                               >
                                 Delete
                               </button>
@@ -324,26 +292,9 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         ))}
                       </div>
                     )}
-                    
-                    <div>
-                      <label htmlFor="apiBaseUrl" className="block text-sm font-medium text-gray-300">
-                        Backend API URL
-                      </label>
-                      <input
-                        type="url"
-                        id="apiBaseUrl"
-                        value={apiBaseUrl}
-                        onChange={(e) => setApiBaseUrl(e.target.value)}
-                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="http://localhost:8000"
-                      />
-                      <p className="mt-1 text-xs text-gray-400">
-                        URL for the Projector backend API
-                      </p>
-                    </div>
                   </div>
                   
-                  <div className="space-y-4 border-l border-gray-700 pl-6">
+                  <div className="space-y-4">
                     <h3 className="text-lg font-medium text-gray-200">
                       {editingConfigId ? 'Edit Configuration' : 'New Configuration'}
                     </h3>
@@ -358,7 +309,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         value={configName}
                         onChange={(e) => setConfigName(e.target.value)}
                         className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="My OpenAI Config"
+                        placeholder="e.g., My OpenAI Config"
                       />
                     </div>
                     
@@ -369,24 +320,14 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       <select
                         id="aiProvider"
                         value={aiProvider}
-                        onChange={(e) => {
-                          setAiProvider(e.target.value as AIProvider);
-                          if (e.target.value === 'Open_AI') {
-                            setModel('gpt-3.5-turbo');
-                          } else if (e.target.value === 'Anthropic') {
-                            setModel('claude-3-haiku-20240307');
-                          } else if (e.target.value === 'Nvidia') {
-                            setModel('llama-3-70b');
-                          } else {
-                            setModel('');
-                          }
-                        }}
+                        onChange={(e) => setAiProvider(e.target.value as AIProvider)}
                         className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                       >
-                        <option value="Open_AI">OpenAI</option>
-                        <option value="Anthropic">Anthropic</option>
-                        <option value="Open_AI_Compatible">OpenAI Compatible</option>
-                        <option value="Nvidia">Nvidia</option>
+                        {providerNames.map((provider) => (
+                          <option key={provider.type} value={provider.type}>
+                            {provider.name}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     
@@ -404,7 +345,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       />
                     </div>
                     
-                    {aiProvider === 'Open_AI_Compatible' && (
+                    {needsCustomEndpoint(aiProvider) && (
                       <div>
                         <label htmlFor="customEndpoint" className="block text-sm font-medium text-gray-300">
                           Custom API Endpoint
@@ -435,44 +376,11 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                       >
                         <option value="">Select a model</option>
-                        {availableModels.length > 0 ? (
-                          availableModels.map((modelName) => (
-                            <option key={modelName} value={modelName}>
-                              {modelName}
-                            </option>
-                          ))
-                        ) : (
-                          <>
-                            {aiProvider === 'Open_AI' && (
-                              <>
-                                <option value="gpt-4">GPT-4</option>
-                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                              </>
-                            )}
-                            {aiProvider === 'Anthropic' && (
-                              <>
-                                <option value="claude-3-opus-20240229">Claude 3 Opus</option>
-                                <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
-                                <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
-                              </>
-                            )}
-                            {aiProvider === 'Nvidia' && (
-                              <>
-                                <option value="llama-3-70b">Llama 3 70B</option>
-                                <option value="mixtral-8x7b">Mixtral 8x7B</option>
-                              </>
-                            )}
-                            {aiProvider === 'Open_AI_Compatible' && (
-                              <>
-                                <option value="llama-3-8b">Llama 3 8B</option>
-                                <option value="llama-3-70b">Llama 3 70B</option>
-                                <option value="mistral-7b">Mistral 7B</option>
-                                <option value="mixtral-8x7b">Mixtral 8x7B</option>
-                              </>
-                            )}
-                          </>
-                        )}
+                        {availableModels.map((modelName) => (
+                          <option key={modelName} value={modelName}>
+                            {modelName}
+                          </option>
+                        ))}
                       </select>
                       {availableModels.length === 0 && !isLoadingModels && apiKey && (
                         <button
@@ -515,7 +423,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white flex-1 ${
                           isTesting ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
                         }`}
-                        disabled={isTesting || (!apiKey) || (aiProvider === 'Open_AI_Compatible' && !customEndpoint)}
+                        disabled={isTesting || (!apiKey) || (needsCustomEndpoint(aiProvider) && !customEndpoint)}
                       >
                         {isTesting ? 'Testing...' : 'Test Connection'}
                       </button>
