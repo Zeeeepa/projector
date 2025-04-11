@@ -7,7 +7,7 @@ from ..models.providers import register_providers
 # Initialize the router
 router = APIRouter(prefix="/models", tags=["models"])
 
-# Register all providers
+# Make sure providers are registered
 register_providers()
 
 @router.get("/providers")
@@ -19,7 +19,10 @@ async def get_providers() -> List[Dict[str, str]]:
         List[Dict[str, str]]: List of provider information
     """
     registry = get_provider_registry()
-    return registry.get_provider_names()
+    providers = registry.get_provider_names()
+    # Log the providers for debugging
+    print(f"Available providers: {providers}")
+    return providers
 
 @router.post("/validate")
 async def validate_api_key(

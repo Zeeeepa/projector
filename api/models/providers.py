@@ -10,6 +10,7 @@ from .anthropic import AnthropicProvider
 # from .deepinfra import DeepInfraProvider
 # from .openrouter import OpenRouterProvider
 
+# Initialize providers on module import
 def register_providers():
     """Register all available model providers with the registry"""
     registry = get_provider_registry()
@@ -27,3 +28,6 @@ def register_providers():
     # registry.register_provider(OpenRouterProvider())
     
     return registry
+
+# Register providers on module import
+register_providers()
