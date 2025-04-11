@@ -74,4 +74,13 @@ export interface APISettings {
   customEndpoint?: string;
 }
 
-export type AIProvider = 'Open_AI' | 'Anthropic' | 'Open_AI_Compatible' | 'Nvidia';
+/**
+ * Supported AI providers
+ * - Open_AI: OpenAI API (GPT models)
+ * - Anthropic: Anthropic API (Claude models)
+ * - Nvidia: Nvidia API
+ * - Open_AI_Compatible: OpenAI-compatible APIs (DeepInfra, OpenRouter, etc.)
+ * - DeepInfra: DeepInfra API
+ * - OpenRouter: OpenRouter API
+ */
+export type AIProvider = 'Open_AI' | 'Anthropic' | 'Open_AI_Compatible' | 'Nvidia' | 'DeepInfra' | 'OpenRouter';
