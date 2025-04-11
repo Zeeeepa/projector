@@ -5,8 +5,8 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Body
 from pydantic import BaseModel
 
-from projector.backend.slack_manager import SlackManager
-from projector.api.main import get_slack_manager
+from backend.slack_manager import SlackManager
+from api.main import get_slack_manager
 
 router = APIRouter(prefix="/slack", tags=["slack"])
 

@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 
-from projector.backend.github_manager import GitHubManager
-from projector.api.main import get_github_manager
+from backend.github_manager import GitHubManager
+from api.main import get_github_manager
 
 router = APIRouter(prefix="/github", tags=["github"])
 

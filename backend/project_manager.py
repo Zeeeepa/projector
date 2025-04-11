@@ -1,20 +1,19 @@
 """
-Project Manager for MultiThread Slack GitHub Tool.
+Project Manager for the Projector application.
 """
-import uuid
-import logging
+import os
 import json
-from datetime import datetime
-from typing import Dict, List, Optional, Any
+import logging
+import time
+import uuid
+from typing import List, Dict, Any, Optional, Union
+from datetime import datetime, timedelta
 
-from codegen.agents.planning_agent import PlanningAgent
-from codegen.agents.pr_review_agent import PRReviewAgent
-from codegen.agents.planning.planning import PlanStepStatus
-from projector.backend.project import Project
-from projector.backend.project_database import ProjectDatabase
-from projector.backend.github_manager import GitHubManager
-from projector.backend.slack_manager import SlackManager
-from projector.backend.thread_pool import ThreadPool
+from backend.project import Project
+from backend.project_database import ProjectDatabase
+from backend.github_manager import GitHubManager
+from backend.slack_manager import SlackManager
+from backend.thread_pool import ThreadPool
 
 class ProjectManager:
     """Manages multiple projects and their configurations with a focus on tracking progress."""

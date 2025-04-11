@@ -1,13 +1,17 @@
 """
-Utility functions for the MultiThread Slack GitHub Tool.
+Utility functions for the Projector application.
 """
 import os
-import re
+import json
 import logging
-from projector.backend.config import (
-    SLACK_USER_TOKEN, GITHUB_TOKEN, GITHUB_USERNAME,
-    SLACK_DEFAULT_CHANNEL, GITHUB_DEFAULT_REPO,
-    OPENAI_API_KEY, ENABLE_AI_FEATURES
+import re
+from typing import Dict, List, Optional, Any
+
+from backend.config import (
+    DEFAULT_SLACK_CHANNEL,
+    DEFAULT_GITHUB_REPO,
+    DEFAULT_MODEL_PROVIDER,
+    DEFAULT_MODEL_NAME
 )
 
 logger = logging.getLogger(__name__)
@@ -15,26 +19,22 @@ logger = logging.getLogger(__name__)
 def validate_config():
     """Validate configuration settings."""
     # Check Slack configuration
-    if not SLACK_USER_TOKEN:
-        logger.error("SLACK_USER_TOKEN is missing.")
+    if not DEFAULT_SLACK_CHANNEL:
+        logger.error("DEFAULT_SLACK_CHANNEL is missing.")
         return False
     
     # Check GitHub configuration
-    if not GITHUB_TOKEN:
-        logger.error("GITHUB_TOKEN is missing.")
+    if not DEFAULT_GITHUB_REPO:
+        logger.error("DEFAULT_GITHUB_REPO is missing.")
         return False
     
-    if not GITHUB_USERNAME:
-        logger.error("GITHUB_USERNAME is missing.")
+    # Check model provider configuration
+    if not DEFAULT_MODEL_PROVIDER:
+        logger.error("DEFAULT_MODEL_PROVIDER is missing.")
         return False
     
-    if not GITHUB_DEFAULT_REPO:
-        logger.error("GITHUB_DEFAULT_REPO is missing.")
-        return False
-    
-    # Check AI configuration if enabled
-    if ENABLE_AI_FEATURES and not OPENAI_API_KEY:
-        logger.error("OPENAI_API_KEY is missing but AI features are enabled.")
+    if not DEFAULT_MODEL_NAME:
+        logger.error("DEFAULT_MODEL_NAME is missing.")
         return False
     
     return True

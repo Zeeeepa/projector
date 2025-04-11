@@ -11,6 +11,12 @@ from pydantic import BaseModel
 # Import routes
 from .routes import models, projects, chat, github, slack
 
+# Import managers
+from backend.github_manager import GitHubManager
+from backend.slack_manager import SlackManager
+from backend.project_database import ProjectDatabase
+from backend.ai_user_agent import AIUserAgent
+
 # Load environment variables with explicit encoding
 try:
     load_dotenv(encoding="utf-8")
@@ -51,6 +57,71 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Manager instances
+_github_manager = None
+_slack_manager = None
+_project_database = None
+_ai_user_agent = None
+
+def get_github_manager():
+    """
+    Get or create a GitHub manager instance.
+    
+    Returns:
+        GitHubManager instance
+    """
+    global _github_manager
+    if _github_manager is None:
+        _github_manager = GitHubManager()
+    return _github_manager
+
+def get_slack_manager():
+    """
+    Get or create a Slack manager instance.
+    
+    Returns:
+        SlackManager instance
+    """
+    global _slack_manager
+    if _slack_manager is None:
+        slack_token = os.getenv("SLACK_TOKEN")
+        default_channel = os.getenv("SLACK_DEFAULT_CHANNEL", "general")
+        _slack_manager = SlackManager(slack_token, default_channel)
+    return _slack_manager
+
+def get_project_database():
+    """
+    Get or create a project database instance.
+    
+    Returns:
+        ProjectDatabase instance
+    """
+    global _project_database
+    if _project_database is None:
+        _project_database = ProjectDatabase()
+    return _project_database
+
+def get_ai_user_agent():
+    """
+    Get or create an AI user agent instance.
+    
+    Returns:
+        AIUserAgent instance
+    """
+    global _ai_user_agent
+    if _ai_user_agent is None:
+        slack_manager = get_slack_manager()
+        github_manager = get_github_manager()
+        project_database = get_project_database()
+        
+        # Initialize AI user agent
+        _ai_user_agent = AIUserAgent(
+            slack_manager=slack_manager,
+            github_manager=github_manager,
+            project_database=project_database
+        )
+    return _ai_user_agent
 
 # Include routers
 app.include_router(models.router, prefix="/api")
