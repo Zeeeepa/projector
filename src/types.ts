@@ -27,7 +27,6 @@ export interface AIConfig {
   aiProvider: AIProvider;
   customEndpoint?: string;
   isVerified?: boolean;
-  isCompatibleProvider?: boolean;
   apiBaseUrl?: string;
 }
 

@@ -35,7 +35,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [baseApiEndpoint, setBaseApiEndpoint] = useState('');
   const [apiBaseUrlInput, setApiBaseUrlInput] = useState('');
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
-  const [isCompatibleProvider, setIsCompatibleProvider] = useState(false);
   
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -60,7 +59,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         setCustomModelInput(activeConfig.model);
         setAiProvider(activeConfig.aiProvider);
         setCustomEndpoint(activeConfig.customEndpoint || '');
-        setIsCompatibleProvider(!!activeConfig.isCompatibleProvider);
         setApiBaseUrlInput(activeConfig.apiBaseUrl || '');
         
         if (activeConfig.customEndpoint) {
@@ -93,7 +91,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setCustomEndpoint('');
     setBaseApiEndpoint('');
     setApiBaseUrlInput('');
-    setIsCompatibleProvider(false);
     setTestResult(null);
   };
 
@@ -114,7 +111,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       return;
     }
     
-    const modelToSave = isCompatibleProvider ? customModelInput : model;
+    const modelToSave = aiProvider === 'openai_compatible' ? customModelInput : model;
     
     if (!modelToSave) {
       alert('Please enter a model');
@@ -122,7 +119,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     }
     
     let endpointToSave = customEndpoint;
-    if (aiProvider === 'openai_compatible' && isCompatibleProvider && baseApiEndpoint) {
+    if (aiProvider === 'openai_compatible' && baseApiEndpoint) {
       endpointToSave = baseApiEndpoint;
       if (!endpointToSave.endsWith('/v1')) {
         if (endpointToSave.endsWith('/')) {
@@ -142,8 +139,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       aiProvider,
       customEndpoint: endpointToSave || undefined,
       isVerified: testResult?.success || false,
-      isCompatibleProvider,
-      apiBaseUrl: apiBaseUrlInput || undefined
+      apiBaseUrl: aiProvider === 'openai_compatible' ? apiBaseUrlInput : undefined
     };
     
     if (editingConfigId) {
@@ -170,7 +166,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setCustomModelInput(config.model);
     setAiProvider(config.aiProvider);
     setCustomEndpoint(config.customEndpoint || '');
-    setIsCompatibleProvider(!!config.isCompatibleProvider);
+    setApiBaseUrlInput(config.apiBaseUrl || '');
     
     if (config.customEndpoint) {
       const endpointParts = config.customEndpoint.split('/v1');
@@ -200,7 +196,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setAvailableModels([]);
     
     try {
-      if (aiProvider === 'openai_compatible' && isCompatibleProvider) {
+      if (aiProvider === 'openai_compatible') {
         setIsLoadingModels(false);
         return;
       }
@@ -224,16 +220,55 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     return provider === 'openai_compatible' || provider === 'deepinfra' || provider === 'openrouter';
   };
 
+  const testConnection = async () => {
+    if (!apiKey) return;
+    
+    setIsTesting(true);
+    setTestResult(null);
+    
+    try {
+      if (aiProvider === 'openai_compatible') {
+        setTestResult({
+          success: true,
+          message: 'Using custom OpenAI-compatible configuration'
+        });
+        setIsTesting(false);
+        return;
+      }
+      
+      const result = await apiService.testConnection(
+        aiProvider,
+        apiKey,
+        model,
+        needsCustomEndpoint(aiProvider) ? customEndpoint : undefined
+      );
+      
+      setTestResult(result);
+      
+      if (result.success) {
+        fetchModels();
+      }
+    } catch (error) {
+      console.error('Error testing connection:', error);
+      setTestResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to test connection'
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   useEffect(() => {
     const validateApiKey = async () => {
       if (!apiKey || isValidatingKey) return;
       
       setIsValidatingKey(true);
       try {
-        if (aiProvider === 'openai_compatible' && isCompatibleProvider) {
+        if (aiProvider === 'openai_compatible') {
           setTestResult({
             success: true,
-            message: 'Using custom configuration'
+            message: 'Using custom OpenAI-compatible configuration'
           });
           setIsValidatingKey(false);
           return;
@@ -281,16 +316,16 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     }, 1000);
     
     return () => clearTimeout(timer);
-  }, [apiKey, aiProvider, customEndpoint, isCompatibleProvider]);
+  }, [apiKey, aiProvider, customEndpoint]);
 
   useEffect(() => {
-    if (apiKey && needsCustomEndpoint(aiProvider) && customEndpoint && !isCompatibleProvider) {
+    if (apiKey && needsCustomEndpoint(aiProvider) && customEndpoint && aiProvider !== 'openai_compatible') {
       fetchModels();
     }
-  }, [customEndpoint, isCompatibleProvider]);
+  }, [customEndpoint]);
 
   useEffect(() => {
-    if (aiProvider === 'openai_compatible' && isCompatibleProvider && baseApiEndpoint) {
+    if (aiProvider === 'openai_compatible' && baseApiEndpoint) {
       let endpoint = baseApiEndpoint;
       if (!endpoint.endsWith('/v1')) {
         if (endpoint.endsWith('/')) {
@@ -300,7 +335,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       }
       setCustomEndpoint(endpoint);
     }
-  }, [baseApiEndpoint, aiProvider, isCompatibleProvider]);
+  }, [baseApiEndpoint, aiProvider]);
 
   useEffect(() => {
     const validateGithubToken = async () => {
@@ -332,51 +367,25 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     const timer = setTimeout(() => {
       if (githubToken) {
         validateGithubToken();
-      } else {
-        setGithubTokenValid(null);
       }
     }, 1000);
     
     return () => clearTimeout(timer);
   }, [githubToken]);
 
-  const testConnection = async () => {
-    setIsTesting(true);
-    setTestResult(null);
-    
-    try {
-      const result = await apiService.testAIConfig({
-        aiProvider,
-        apiKey,
-        model: isCompatibleProvider ? customModelInput : model,
-        customEndpoint: needsCustomEndpoint(aiProvider) ? customEndpoint : undefined,
-        isCompatibleProvider
-      });
-      
-      setTestResult(result);
-    } catch (error) {
-      setTestResult({
-        success: false,
-        message: error instanceof Error ? error.message : 'Failed to test connection'
-      });
-    } finally {
-      setIsTesting(false);
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
-          <div className="p-6 space-y-6">
-            <div className="flex justify-between items-center">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-medium text-gray-100">Settings</h3>
               <button
                 type="button"
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-100"
+                className="text-gray-400 hover:text-white"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -384,119 +393,95 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               </button>
             </div>
             
-            <div className="border-b border-gray-700">
-              <nav className="-mb-px flex space-x-6">
+            <div className="mb-6">
+              <div className="flex border-b border-gray-700">
                 <button
                   type="button"
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'saved_configs'
-                      ? 'border-indigo-500 text-indigo-400'
-                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
-                  }`}
+                  className={`px-4 py-2 font-medium ${activeTab === 'saved_configs' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400 hover:text-gray-300'}`}
                   onClick={() => setActiveTab('saved_configs')}
                 >
                   Saved AI Configurations
                 </button>
                 <button
                   type="button"
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'new_config'
-                      ? 'border-indigo-500 text-indigo-400'
-                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
-                  }`}
+                  className={`px-4 py-2 font-medium ${activeTab === 'new_config' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400 hover:text-gray-300'}`}
                   onClick={() => {
+                    resetConfigForm();
                     setActiveTab('new_config');
-                    if (!editingConfigId) {
-                      resetConfigForm();
-                    }
                   }}
                 >
-                  {editingConfigId ? 'Edit Configuration' : 'New Configuration'}
+                  Add/Edit Configuration
                 </button>
                 <button
                   type="button"
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'github'
-                      ? 'border-indigo-500 text-indigo-400'
-                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
-                  }`}
+                  className={`px-4 py-2 font-medium ${activeTab === 'github' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400 hover:text-gray-300'}`}
                   onClick={() => setActiveTab('github')}
                 >
                   GitHub Settings
                 </button>
-              </nav>
+              </div>
             </div>
             
             {activeTab === 'saved_configs' && (
               <div className="space-y-4">
-                <h4 className="text-lg font-medium text-gray-200">Saved AI Configurations</h4>
-                
                 {aiConfigs.length === 0 ? (
-                  <div className="text-center py-4 text-gray-400">
-                    <p>No AI configurations saved yet.</p>
+                  <div className="text-center py-8">
+                    <p className="text-gray-400">No AI configurations saved yet.</p>
                     <button
                       type="button"
                       onClick={() => setActiveTab('new_config')}
-                      className="mt-2 text-indigo-400 hover:text-indigo-300"
+                      className="mt-4 px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
                     >
-                      Create your first configuration
+                      Add New Configuration
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {aiConfigs.map((config) => (
-                      <div 
-                        key={config.id} 
-                        className={`p-3 rounded-md border ${
-                          activeAIConfigId === config.id 
-                            ? 'border-indigo-500 bg-gray-800' 
-                            : 'border-gray-700 bg-gray-900 hover:bg-gray-800'
+                  <div className="grid grid-cols-1 gap-4">
+                    {aiConfigs.map(config => (
+                      <div
+                        key={config.id}
+                        className={`p-4 rounded-lg border ${
+                          activeAIConfigId === config.id
+                            ? 'border-blue-500 bg-gray-800'
+                            : 'border-gray-700 bg-gray-850 hover:bg-gray-800'
                         }`}
                       >
                         <div className="flex justify-between items-start">
                           <div>
-                            <h5 className="font-medium text-gray-200 flex items-center">
-                              {config.name}
-                              {config.isVerified && (
-                                <span className="ml-2 text-green-400 text-xs">✓ Verified</span>
-                              )}
-                              {activeAIConfigId === config.id && (
-                                <span className="ml-2 text-indigo-400 text-xs">Active</span>
-                              )}
-                            </h5>
+                            <h4 className="text-lg font-medium text-gray-100">{config.name}</h4>
                             <p className="text-sm text-gray-400">
-                              {config.aiProvider} • {config.model}
+                              Provider: {providerRegistry.getProvider(config.aiProvider)?.getName() || config.aiProvider}
                             </p>
-                            {config.customEndpoint && (
-                              <p className="text-xs text-gray-500 truncate max-w-xs">
-                                {config.customEndpoint}
-                              </p>
+                            <p className="text-sm text-gray-400">Model: {config.model}</p>
+                            {config.isVerified && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900 text-green-100 mt-2">
+                                Verified
+                              </span>
                             )}
                           </div>
                           <div className="flex space-x-2">
                             <button
                               type="button"
                               onClick={() => handleSetActiveConfig(config.id)}
-                              className={`px-2 py-1 text-xs rounded-md ${
+                              className={`px-3 py-1 text-xs font-medium rounded-md ${
                                 activeAIConfigId === config.id
-                                  ? 'bg-indigo-700 text-indigo-200 cursor-default'
-                                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                               }`}
-                              disabled={activeAIConfigId === config.id}
                             >
-                              {activeAIConfigId === config.id ? 'Active' : 'Set Active'}
+                              {activeAIConfigId === config.id ? 'Active' : 'Use'}
                             </button>
                             <button
                               type="button"
                               onClick={() => handleEditConfig(config)}
-                              className="px-2 py-1 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-600"
+                              className="px-3 py-1 text-xs font-medium rounded-md bg-gray-700 text-gray-300 hover:bg-gray-600"
                             >
                               Edit
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDeleteConfig(config.id)}
-                              className="px-2 py-1 text-xs bg-red-800 text-white rounded-md hover:bg-red-700"
+                              className="px-3 py-1 text-xs font-medium rounded-md bg-red-900 text-red-100 hover:bg-red-800"
                             >
                               Delete
                             </button>
@@ -504,17 +489,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                         </div>
                       </div>
                     ))}
-                    
-                    <button
-                      type="button"
-                      onClick={() => {
-                        resetConfigForm();
-                        setActiveTab('new_config');
-                      }}
-                      className="w-full py-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 border border-dashed border-gray-700 rounded-md hover:border-gray-600"
-                    >
-                      + Add New Configuration
-                    </button>
                   </div>
                 )}
               </div>
@@ -522,219 +496,187 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
             
             {activeTab === 'new_config' && (
               <>
-                <div className="space-y-4">
-                  <h4 className="text-lg font-medium text-gray-200">
-                    {editingConfigId ? 'Edit Configuration' : 'New AI Configuration'}
-                  </h4>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="configName" className="block text-sm font-medium text-gray-300">
-                        Configuration Name
-                      </label>
-                      <input
-                        type="text"
-                        id="configName"
-                        value={configName}
-                        onChange={(e) => setConfigName(e.target.value)}
-                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="My Configuration"
-                      />
-                    </div>
+                <div className="space-y-6">
+                  <div className="bg-gray-850 p-6 rounded-lg border border-gray-700">
+                    <h4 className="text-lg font-medium text-gray-100 mb-4">
+                      {editingConfigId ? 'Edit AI Configuration' : 'New AI Configuration'}
+                    </h4>
                     
-                    <div>
-                      <label htmlFor="aiProvider" className="block text-sm font-medium text-gray-300">
-                        AI Provider
-                      </label>
-                      <select
-                        id="aiProvider"
-                        value={aiProvider}
-                        onChange={(e) => setAiProvider(e.target.value as AIProvider)}
-                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                      >
-                        {providerNames.map((provider) => (
-                          <option key={provider.type} value={provider.type}>
-                            {provider.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    {aiProvider === 'openai_compatible' && (
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id="isCompatibleProvider"
-                          checked={isCompatibleProvider}
-                          onChange={(e) => setIsCompatibleProvider(e.target.checked)}
-                          className="h-4 w-4 rounded border-gray-700 text-indigo-600 focus:ring-indigo-500 bg-gray-800"
-                        />
-                        <label htmlFor="isCompatibleProvider" className="ml-2 block text-sm text-gray-300">
-                          OpenAI API compatible (for Anthropic, etc.)
-                        </label>
-                      </div>
-                    )}
-                    
-                    <div>
-                      <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300">
-                        API Key
-                      </label>
-                      <input
-                        type="password"
-                        id="apiKey"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="Enter your API key"
-                      />
-                    </div>
-                    
-                    {aiProvider === 'openai' && (
+                    <div className="space-y-4">
                       <div>
-                        <label htmlFor="apiBaseUrlInput" className="block text-sm font-medium text-gray-300">
-                          API Base URL
-                        </label>
-                        <input
-                          type="url"
-                          id="apiBaseUrlInput"
-                          value={apiBaseUrlInput}
-                          onChange={(e) => setApiBaseUrlInput(e.target.value)}
-                          className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                          placeholder="https://api.openai.com"
-                        />
-                        <p className="mt-1 text-xs text-gray-400">
-                          Custom base URL for OpenAI API (leave empty for default)
-                        </p>
-                      </div>
-                    )}
-                    
-                    {aiProvider === 'openai_compatible' && isCompatibleProvider && (
-                      <div>
-                        <label htmlFor="baseApiEndpoint" className="block text-sm font-medium text-gray-300">
-                          Base API Endpoint
-                        </label>
-                        <input
-                          type="url"
-                          id="baseApiEndpoint"
-                          value={baseApiEndpoint}
-                          onChange={(e) => setBaseApiEndpoint(e.target.value)}
-                          className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                          placeholder="https://api.example.com"
-                        />
-                        <p className="mt-1 text-xs text-gray-400">
-                          Base URL for the API (e.g., https://api.example.com)
-                        </p>
-                      </div>
-                    )}
-                    
-                    {needsCustomEndpoint(aiProvider) && !(aiProvider === 'openai_compatible' && isCompatibleProvider) && (
-                      <div>
-                        <label htmlFor="customEndpoint" className="block text-sm font-medium text-gray-300">
-                          Custom API Endpoint
-                        </label>
-                        <input
-                          type="url"
-                          id="customEndpoint"
-                          value={customEndpoint}
-                          onChange={(e) => setCustomEndpoint(e.target.value)}
-                          className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                          placeholder="https://your-api-endpoint.com/v1"
-                        />
-                        <p className="mt-1 text-xs text-gray-400">
-                          Base URL for the API (e.g., https://api.example.com/v1)
-                        </p>
-                      </div>
-                    )}
-                    
-                    {aiProvider === 'openai_compatible' && isCompatibleProvider ? (
-                      <div>
-                        <label htmlFor="customModelInput" className="block text-sm font-medium text-gray-300">
-                          Model Name
+                        <label htmlFor="configName" className="block text-sm font-medium text-gray-300">
+                          Configuration Name
                         </label>
                         <input
                           type="text"
-                          id="customModelInput"
-                          value={customModelInput}
-                          onChange={(e) => setCustomModelInput(e.target.value)}
+                          id="configName"
+                          value={configName}
+                          onChange={(e) => setConfigName(e.target.value)}
                           className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                          placeholder="Enter model name (e.g., claude-3-opus-20240229)"
+                          placeholder="My OpenAI Config"
                         />
                       </div>
-                    ) : (
+                      
                       <div>
-                        <label htmlFor="model" className="block text-sm font-medium text-gray-300 flex justify-between">
-                          <span>AI Model</span>
-                          {isLoadingModels && <span className="text-blue-400 text-xs">Loading models...</span>}
+                        <label htmlFor="aiProvider" className="block text-sm font-medium text-gray-300">
+                          AI Provider
                         </label>
                         <select
-                          id="model"
-                          value={model}
-                          onChange={(e) => setModel(e.target.value)}
+                          id="aiProvider"
+                          value={aiProvider}
+                          onChange={(e) => setAiProvider(e.target.value as AIProvider)}
                           className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                         >
-                          <option value="">Select a model</option>
-                          {availableModels.map((modelName) => (
-                            <option key={modelName} value={modelName}>
-                              {modelName}
+                          {providerNames.map((provider) => (
+                            <option key={provider.type} value={provider.type}>
+                              {provider.name}
                             </option>
                           ))}
                         </select>
-                        {availableModels.length === 0 && !isLoadingModels && apiKey && (
-                          <button
-                            type="button"
-                            onClick={fetchModels}
-                            className="mt-1 text-xs text-blue-400 hover:text-blue-300"
-                          >
-                            Fetch available models
-                          </button>
-                        )}
                       </div>
-                    )}
-                    
-                    {testResult && (
-                      <div className={`p-3 rounded-md ${testResult.success ? 'bg-green-900 text-green-100' : 'bg-red-900 text-red-100'}`}>
-                        {testResult.message}
-                      </div>
-                    )}
-                    
-                    <div className="flex space-x-3">
-                      <button
-                        type="button"
-                        onClick={testConnection}
-                        className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white flex-1 ${
-                          isTesting ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                        }`}
-                        disabled={isTesting || (!apiKey) || 
-                          (needsCustomEndpoint(aiProvider) && !isCompatibleProvider && !customEndpoint) ||
-                          (aiProvider === 'openai_compatible' && isCompatibleProvider && (!baseApiEndpoint || !customModelInput))}
-                      >
-                        {isTesting ? 'Testing...' : 'Test Connection'}
-                      </button>
                       
-                      <button
-                        type="button"
-                        onClick={handleSaveConfig}
-                        className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 flex-1"
-                        disabled={!configName || !apiKey || 
-                          (!(aiProvider === 'openai_compatible' && isCompatibleProvider) && !model) ||
-                          ((aiProvider === 'openai_compatible' && isCompatibleProvider) && !customModelInput)}
-                      >
-                        {editingConfigId ? 'Update Configuration' : 'Save Configuration'}
-                      </button>
+                      <div>
+                        <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300">
+                          API Key
+                        </label>
+                        <input
+                          type="text"
+                          id="apiKey"
+                          value={apiKey}
+                          onChange={(e) => setApiKey(e.target.value)}
+                          className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                          placeholder="Enter your API key"
+                        />
+                      </div>
+                      
+                      {aiProvider === 'openai_compatible' && (
+                        <div>
+                          <label htmlFor="baseApiEndpoint" className="block text-sm font-medium text-gray-300">
+                            API Base URL
+                          </label>
+                          <input
+                            type="url"
+                            id="baseApiEndpoint"
+                            value={baseApiEndpoint}
+                            onChange={(e) => setBaseApiEndpoint(e.target.value)}
+                            className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            placeholder="https://api.example.com"
+                          />
+                          <p className="mt-1 text-xs text-gray-400">
+                            Base URL for the API (e.g., https://api.example.com)
+                          </p>
+                        </div>
+                      )}
+                      
+                      {needsCustomEndpoint(aiProvider) && aiProvider !== 'openai_compatible' && (
+                        <div>
+                          <label htmlFor="customEndpoint" className="block text-sm font-medium text-gray-300">
+                            Custom API Endpoint
+                          </label>
+                          <input
+                            type="url"
+                            id="customEndpoint"
+                            value={customEndpoint}
+                            onChange={(e) => setCustomEndpoint(e.target.value)}
+                            className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            placeholder="https://your-api-endpoint.com/v1"
+                          />
+                          <p className="mt-1 text-xs text-gray-400">
+                            Base URL for the API (e.g., https://api.example.com/v1)
+                          </p>
+                        </div>
+                      )}
+                      
+                      {aiProvider === 'openai_compatible' ? (
+                        <div>
+                          <label htmlFor="customModelInput" className="block text-sm font-medium text-gray-300">
+                            Model Name
+                          </label>
+                          <input
+                            type="text"
+                            id="customModelInput"
+                            value={customModelInput}
+                            onChange={(e) => setCustomModelInput(e.target.value)}
+                            className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            placeholder="Enter model name (e.g., claude-3-opus-20240229)"
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <label htmlFor="model" className="block text-sm font-medium text-gray-300 flex justify-between">
+                            <span>AI Model</span>
+                            {isLoadingModels && <span className="text-blue-400 text-xs">Loading models...</span>}
+                          </label>
+                          <select
+                            id="model"
+                            value={model}
+                            onChange={(e) => setModel(e.target.value)}
+                            className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                          >
+                            <option value="">Select a model</option>
+                            {availableModels.map((modelName) => (
+                              <option key={modelName} value={modelName}>
+                                {modelName}
+                              </option>
+                            ))}
+                          </select>
+                          {availableModels.length === 0 && !isLoadingModels && apiKey && (
+                            <button
+                              type="button"
+                              onClick={fetchModels}
+                              className="mt-1 text-xs text-blue-400 hover:text-blue-300"
+                            >
+                              Fetch available models
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      
+                      {testResult && (
+                        <div className={`p-3 rounded-md ${testResult.success ? 'bg-green-900 text-green-100' : 'bg-red-900 text-red-100'}`}>
+                          {testResult.message}
+                        </div>
+                      )}
+                      
+                      <div className="flex space-x-3">
+                        <button
+                          type="button"
+                          onClick={testConnection}
+                          className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white flex-1 ${
+                            isTesting ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                          }`}
+                          disabled={isTesting || (!apiKey) || 
+                            (needsCustomEndpoint(aiProvider) && aiProvider !== 'openai_compatible' && !customEndpoint) ||
+                            (aiProvider === 'openai_compatible' && (!baseApiEndpoint || !customModelInput))}
+                        >
+                          {isTesting ? 'Testing...' : 'Test Connection'}
+                        </button>
+                        
+                        <button
+                          type="button"
+                          onClick={handleSaveConfig}
+                          className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 flex-1"
+                          disabled={!configName || !apiKey || 
+                            (aiProvider !== 'openai_compatible' && !model) ||
+                            (aiProvider === 'openai_compatible' && !customModelInput)}
+                        >
+                          {editingConfigId ? 'Update Configuration' : 'Save Configuration'}
+                        </button>
+                      </div>
+                      
+                      {editingConfigId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            resetConfigForm();
+                            setActiveTab('saved_configs');
+                          }}
+                          className="w-full px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
+                        >
+                          Cancel Editing
+                        </button>
+                      )}
                     </div>
-                    
-                    {editingConfigId && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          resetConfigForm();
-                          setActiveTab('saved_configs');
-                        }}
-                        className="w-full px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
-                      >
-                        Cancel Editing
-                      </button>
-                    )}
                   </div>
                 </div>
               </>
@@ -746,7 +688,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                   GitHub Token
                 </label>
                 <input
-                  type="password"
+                  type="text"
                   id="githubToken"
                   value={githubToken}
                   onChange={(e) => setGithubToken(e.target.value)}
