@@ -2,13 +2,13 @@
 API routes for Slack integration.
 """
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from pydantic import BaseModel
 
 from projector.backend.slack_manager import SlackManager
 from projector.api.main import get_slack_manager
 
-router = APIRouter()
+router = APIRouter(prefix="/slack", tags=["slack"])
 
 class SlackMessage(BaseModel):
     """Model for a Slack message."""
@@ -166,3 +166,8 @@ async def upload_file(
         return {'file': response.get('file')}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+
+@router.get("/")
+async def get_slack_status():
+    """Get Slack integration status."""
+    return {"status": "not_configured"}
