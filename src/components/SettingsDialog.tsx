@@ -592,7 +592,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     {aiProvider === 'openai' && (
                       <div>
                         <label htmlFor="apiBaseUrlInput" className="block text-sm font-medium text-gray-300">
-                          API Base URL (Optional)
+                          API Base URL
                         </label>
                         <input
                           type="url"
