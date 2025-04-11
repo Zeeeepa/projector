@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Project, ProjectStore, ChatStore, ChatMessage, APISettings, AIConfig } from './types';
 import { Project, ProjectStore, ChatStore, ChatMessage, APISettings, AIConfig, SlackConfig } from './types';
+
 export const useProjectStore = create<ProjectStore>()(
   persist(
     (set) => ({
@@ -12,7 +12,7 @@ export const useProjectStore = create<ProjectStore>()(
         apiBaseUrl: '',
         model: 'gpt-4',
         githubToken: '',
-        aiProvider: 'Open_AI',
+        aiProvider: 'openai',
         customEndpoint: '',
       },
       aiConfigs: [],
