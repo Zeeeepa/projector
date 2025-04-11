@@ -2,35 +2,35 @@ import { BaseModelProvider, ProviderApiError } from '../types';
 import { AIProvider } from '../../types';
 
 /**
- * OpenAI API provider implementation
+ * OpenAI Compatible API provider implementation
+ * For third-party services that implement the OpenAI API format
  */
-export class OpenAIProvider extends BaseModelProvider {
-  private static instance: OpenAIProvider;
+export class OpenAICompatibleProvider extends BaseModelProvider {
+  private static instance: OpenAICompatibleProvider;
   
   private constructor() {
-    super('OpenAI', 'openai');
+    super('OpenAI Compatible', 'openai_compatible');
   }
   
   /**
    * Get singleton instance
    */
-  public static getInstance(): OpenAIProvider {
-    if (!OpenAIProvider.instance) {
-      OpenAIProvider.instance = new OpenAIProvider();
+  public static getInstance(): OpenAICompatibleProvider {
+    if (!OpenAICompatibleProvider.instance) {
+      OpenAICompatibleProvider.instance = new OpenAICompatibleProvider();
     }
-    return OpenAIProvider.instance;
+    return OpenAICompatibleProvider.instance;
   }
   
   /**
-   * Validate OpenAI API key
+   * Validate OpenAI Compatible API key
    */
-  async validateApiKey(apiKey: string, customEndpoint?: string, apiBaseUrl?: string): Promise<boolean> {
-    if (!apiKey) return false;
+  async validateApiKey(apiKey: string, customEndpoint?: string): Promise<boolean> {
+    if (!apiKey || !customEndpoint) return false;
     
     try {
       // Make a minimal API call to validate the key
-      const baseUrl = apiBaseUrl || 'https://api.openai.com';
-      const response = await fetch(`${baseUrl}/v1/models`, {
+      const response = await fetch(`${customEndpoint}/models`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`
@@ -39,22 +39,21 @@ export class OpenAIProvider extends BaseModelProvider {
       
       return response.ok;
     } catch (error) {
-      console.error('Error validating OpenAI API key:', error);
+      console.error('Error validating OpenAI Compatible API key:', error);
       return false;
     }
   }
   
   /**
-   * Get available models from OpenAI
+   * Get available models from OpenAI Compatible API
    */
-  async getAvailableModels(apiKey: string, customEndpoint?: string, apiBaseUrl?: string): Promise<string[]> {
-    if (!apiKey) {
-      throw new ProviderApiError('API key is required');
+  async getAvailableModels(apiKey: string, customEndpoint?: string): Promise<string[]> {
+    if (!apiKey || !customEndpoint) {
+      throw new ProviderApiError('API key and endpoint are required');
     }
     
     try {
-      const baseUrl = apiBaseUrl || 'https://api.openai.com';
-      const response = await fetch(`${baseUrl}/v1/models`, {
+      const response = await fetch(`${customEndpoint}/models`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`
@@ -69,28 +68,26 @@ export class OpenAIProvider extends BaseModelProvider {
       
       // Extract model IDs from the response
       if (data.data && Array.isArray(data.data)) {
-        return data.data
-          .filter((model: any) => 
-            model.id.includes('gpt') || 
-            model.id.includes('llama') || 
-            model.id.includes('mistral')
-          )
-          .map((model: any) => model.id);
+        return data.data.map((model: any) => model.id);
       }
       
       return this.getDefaultModels();
     } catch (error) {
-      console.error('Error fetching OpenAI models:', error);
+      console.error('Error fetching OpenAI Compatible models:', error);
       return this.getDefaultModels();
     }
   }
   
   /**
-   * Test connection to OpenAI API
+   * Test connection to OpenAI Compatible API
    */
-  async testConnection(apiKey: string, model: string, testMessage: string, customEndpoint?: string, apiBaseUrl?: string): Promise<{ success: boolean; message: string }> {
+  async testConnection(apiKey: string, model: string, testMessage: string, customEndpoint?: string): Promise<{ success: boolean; message: string }> {
     if (!apiKey) {
       return { success: false, message: 'API key is required' };
+    }
+    
+    if (!customEndpoint) {
+      return { success: false, message: 'API endpoint is required' };
     }
     
     if (!model) {
@@ -98,8 +95,7 @@ export class OpenAIProvider extends BaseModelProvider {
     }
     
     try {
-      const baseUrl = apiBaseUrl || 'https://api.openai.com';
-      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+      const response = await fetch(`${customEndpoint}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -126,26 +122,29 @@ export class OpenAIProvider extends BaseModelProvider {
         message: `Connection successful! Response: "${aiResponse.substring(0, 100)}${aiResponse.length > 100 ? '...' : ''}"`
       };
     } catch (error) {
-      console.error('Error testing OpenAI connection:', error);
+      console.error('Error testing OpenAI Compatible connection:', error);
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to connect to OpenAI API'
+        message: error instanceof Error ? error.message : 'Failed to connect to OpenAI Compatible API'
       };
     }
   }
   
   /**
-   * Send a chat message to OpenAI
+   * Send a chat message to OpenAI Compatible API
    */
   async sendChatMessage(
     apiKey: string,
     model: string,
     messages: { role: string; content: string }[],
-    customEndpoint?: string,
-    apiBaseUrl?: string
+    customEndpoint?: string
   ): Promise<string> {
     if (!apiKey) {
       throw new ProviderApiError('API key is required');
+    }
+    
+    if (!customEndpoint) {
+      throw new ProviderApiError('API endpoint is required');
     }
     
     if (!model) {
@@ -153,8 +152,7 @@ export class OpenAIProvider extends BaseModelProvider {
     }
     
     try {
-      const baseUrl = apiBaseUrl || 'https://api.openai.com';
-      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+      const response = await fetch(`${customEndpoint}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -176,22 +174,25 @@ export class OpenAIProvider extends BaseModelProvider {
       const data = await response.json();
       return data.choices?.[0]?.message?.content || 'No response from AI';
     } catch (error) {
-      console.error('Error sending message to OpenAI:', error);
-      throw new ProviderApiError(error instanceof Error ? error.message : 'Failed to send message to OpenAI API');
+      console.error('Error sending message to OpenAI Compatible API:', error);
+      throw new ProviderApiError(error instanceof Error ? error.message : 'Failed to send message to OpenAI Compatible API');
     }
   }
   
   /**
-   * Get default models for OpenAI
+   * Get default models for OpenAI Compatible
    */
   getDefaultModels(): string[] {
     return [
       'gpt-4',
-      'gpt-4-turbo',
-      'gpt-3.5-turbo'
+      'gpt-3.5-turbo',
+      'claude-3-opus-20240229',
+      'claude-3-sonnet-20240229',
+      'llama-2-70b-chat',
+      'mistral-7b-instruct'
     ];
   }
 }
 
 // Export singleton instance
-export const openAIProvider = OpenAIProvider.getInstance();
+export const openAICompatibleProvider = OpenAICompatibleProvider.getInstance();

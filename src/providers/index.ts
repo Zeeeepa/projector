@@ -5,6 +5,7 @@ import { openAIProvider } from './openai';
 import { nvidiaProvider } from './nvidia';
 import { deepInfraProvider } from './deepinfra';
 import { openRouterProvider } from './openrouter';
+import { openAICompatibleProvider } from './openai_compatible';
 
 /**
  * Registry of all available model providers
@@ -38,6 +39,7 @@ class ProviderRegistry {
     this.registerProvider(nvidiaProvider);
     this.registerProvider(deepInfraProvider);
     this.registerProvider(openRouterProvider);
+    this.registerProvider(openAICompatibleProvider);
   }
   
   /**
@@ -83,7 +85,7 @@ class ProviderRegistry {
 export const providerRegistry = ProviderRegistry.getInstance();
 
 // Export all providers
-export { anthropicProvider, openAIProvider, nvidiaProvider, deepInfraProvider, openRouterProvider };
+export { anthropicProvider, openAIProvider, nvidiaProvider, deepInfraProvider, openRouterProvider, openAICompatibleProvider };
 
 // Export types
 export * from './types';
