@@ -7,6 +7,7 @@ import { SettingsDialog } from './SettingsDialog';
 import RequirementsManager from './RequirementsManager';
 import { useProjectStore } from '../store';
 
+// New component for PR/Branch list
 const PRBranchList: React.FC = () => {
   return (
     <div className="p-4">
@@ -84,6 +85,7 @@ const MainLayout: React.FC = () => {
             Settings
           </button>
           <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition">Dashboard</button>
+          {/* New PR/Branch button */}
           <button 
             className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition"
             onClick={() => setIsPRBranchDialogOpen(true)}
@@ -100,10 +102,12 @@ const MainLayout: React.FC = () => {
       </header>
       
       <div className="flex flex-1 overflow-hidden">
+        {/* New first panel: PRs & Branches list */}
         <div className="w-1/5 border-r border-gray-700 bg-gray-800 overflow-auto">
           <PRBranchList />
         </div>
         
+        {/* Second panel: Project Context */}
         <div className="w-1/5 border-r border-gray-700 bg-gray-800 overflow-auto">
           <div className="flex-1 overflow-auto p-4">
             {activeProject ? (
@@ -160,6 +164,7 @@ const MainLayout: React.FC = () => {
           </div>
         </div>
         
+        {/* Third panel: Step Guide */}
         <div className="w-1/5 border-r border-gray-700 bg-gray-800 overflow-auto">
           {activeProject ? (
             <StepGuide 
@@ -173,6 +178,7 @@ const MainLayout: React.FC = () => {
           )}
         </div>
         
+        {/* Fourth panel: Project Structure */}
         <div className="w-1/5 border-l border-gray-700 bg-gray-800 overflow-auto">
           <div className="p-2">
             <h3 className="font-semibold text-gray-200 p-2">Project Structure</h3>
@@ -187,6 +193,7 @@ const MainLayout: React.FC = () => {
         </div>
       </div>
       
+      {/* Project tabs */}
       <div className="border-t border-gray-700 bg-gray-900">
         <div className="flex border-b border-gray-700 bg-gray-900">
           {projects.length > 0 ? (
@@ -210,6 +217,7 @@ const MainLayout: React.FC = () => {
           )}
         </div>
         
+        {/* Concurrency control */}
         <div className="flex justify-end p-2 bg-gray-800">
           <div className="flex items-center space-x-2">
             <span className="font-medium text-gray-300">Concurrency</span>
@@ -239,6 +247,7 @@ const MainLayout: React.FC = () => {
         onClose={() => setIsSettingsDialogOpen(false)}
       />
       
+      {/* Placeholder for PR/Branch dialog - will be implemented later */}
       {isPRBranchDialogOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full">
