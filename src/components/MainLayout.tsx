@@ -8,12 +8,14 @@ import RequirementsManager from './RequirementsManager';
 import { useProjectStore } from '../store';
 import PRBranchDialog from './PRBranchDialog';
 import { prReviewBotService } from '../services/pr_review_bot';
+import PRReviewBotSettingsPanel from './PRReviewBotSettingsPanel';
 
 const MainLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [isPRBranchDialogOpen, setIsPRBranchDialogOpen] = useState(false);
+  const [isPRReviewSettingsPanelOpen, setIsPRReviewSettingsPanelOpen] = useState(false);
   const [activeView, setActiveView] = useState<'requirements' | 'context'>('context');
   const { projects, setActiveProject, updateProject, activeProject } = useProjectStore();
   const [concurrency, setConcurrency] = useState<number>(2);
@@ -102,9 +104,9 @@ const MainLayout: React.FC = () => {
           <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition">Dashboard</button>
           <button 
             className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition"
-            onClick={() => setIsPRBranchDialogOpen(true)}
+            onClick={() => setIsPRReviewSettingsPanelOpen(true)}
           >
-            PR/Branch
+            PR_Review
           </button>
         </div>
         <button 
@@ -310,6 +312,13 @@ const MainLayout: React.FC = () => {
         <PRBranchDialog
           isOpen={isPRBranchDialogOpen}
           onClose={() => setIsPRBranchDialogOpen(false)}
+        />
+      )}
+
+      {isPRReviewSettingsPanelOpen && (
+        <PRReviewBotSettingsPanel
+          isOpen={isPRReviewSettingsPanelOpen}
+          onClose={() => setIsPRReviewSettingsPanelOpen(false)}
         />
       )}
     </div>
