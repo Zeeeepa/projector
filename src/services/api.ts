@@ -199,7 +199,7 @@ class APIService {
       const response = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100', {
         headers: {
           'Accept': 'application/vnd.github+json',
-          'Authorization': `Bearer ${this.githubToken}`,
+          'Authorization': `token ${this.githubToken}`,
           'X-GitHub-Api-Version': '2022-11-28'
         }
       });
