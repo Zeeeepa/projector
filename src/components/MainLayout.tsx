@@ -7,6 +7,7 @@ import { SettingsDialog } from './SettingsDialog';
 import RequirementsManager from './RequirementsManager';
 import { useProjectStore } from '../store';
 import PRBranchDialog from './PRBranchDialog';
+import { prReviewBotService } from '../services/pr_review_bot';
 
 const MainLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -16,6 +17,14 @@ const MainLayout: React.FC = () => {
   const [activeView, setActiveView] = useState<'requirements' | 'context'>('context');
   const { projects, setActiveProject, updateProject, activeProject } = useProjectStore();
   const [concurrency, setConcurrency] = useState<number>(2);
+  const [prStatus, setPrStatus] = useState<Array<{
+    repo: string;
+    number: number;
+    title: string;
+    status: string;
+    url: string;
+  }>>([]);
+  const [botConnected, setBotConnected] = useState(false);
   
   useEffect(() => {
     if (projects.length > 0 && activeTab === null) {
@@ -30,6 +39,23 @@ const MainLayout: React.FC = () => {
       setConcurrency(activeProject.threads);
     }
   }, [activeProject]);
+
+  useEffect(() => {
+    const fetchPRStatus = async () => {
+      try {
+        const status = await prReviewBotService.getStatus();
+        setPrStatus(status.config.pr_status || []);
+        setBotConnected(status.connection_status === 'connected');
+      } catch (error) {
+        console.error('Error fetching PR status:', error);
+      }
+    };
+
+    fetchPRStatus();
+    const interval = setInterval(fetchPRStatus, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleTabClick = (projectId: string) => {
     setActiveTab(projectId);
@@ -93,15 +119,57 @@ const MainLayout: React.FC = () => {
         <div className="w-1/5 border-r border-gray-700 bg-gray-800 overflow-auto">
           <div className="p-2">
             <h3 className="font-semibold text-gray-200 p-2">PRs & Branches</h3>
-            <div className="text-gray-400 text-center p-4">
-              <p>No PRs or branches yet</p>
-              <button 
-                className="mt-2 px-3 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition text-sm"
-                onClick={() => setIsPRBranchDialogOpen(true)}
-              >
-                Create New
-              </button>
-            </div>
+            {botConnected && (
+              <div className="mb-2 px-2 py-1 bg-green-800 text-green-100 text-sm rounded">
+                PR Review Bot Connected
+              </div>
+            )}
+            {prStatus.length > 0 ? (
+              <div className="space-y-2">
+                {prStatus.map((pr) => (
+                  <div 
+                    key={`${pr.repo}-${pr.number}`}
+                    className="p-2 border border-gray-700 rounded bg-gray-900"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <a 
+                          href={pr.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-400 hover:underline font-medium"
+                        >
+                          {pr.title}
+                        </a>
+                        <div className="text-xs text-gray-400">{pr.repo} #{pr.number}</div>
+                      </div>
+                      <span 
+                        className={`text-xs px-2 py-1 rounded ${
+                          pr.status === 'merged' 
+                            ? 'bg-purple-900 text-purple-200' 
+                            : pr.status === 'under_review' 
+                              ? 'bg-yellow-900 text-yellow-200'
+                              : 'bg-blue-900 text-blue-200'
+                        }`}
+                      >
+                        {pr.status === 'under_review' ? 'Under Review' : 
+                         pr.status === 'merged' ? 'Merged' : pr.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-gray-400 text-center p-4">
+                <p>No PRs or branches yet</p>
+                <button 
+                  className="mt-2 px-3 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition text-sm"
+                  onClick={() => setIsPRBranchDialogOpen(true)}
+                >
+                  Create New
+                </button>
+              </div>
+            )}
           </div>
         </div>
         

@@ -36,6 +36,22 @@ class PRReviewResponse(BaseModel):
     review_url: Optional[str] = None
     message: str
 
+class PRStatus(BaseModel):
+    """PR status model."""
+    repo: str
+    number: int
+    title: str
+    status: str
+    url: str
+
+class PRStatusUpdate(BaseModel):
+    """PR status update model."""
+    prs: List[PRStatus]
+
+class BotConnectionStatus(BaseModel):
+    """Bot connection status model."""
+    status: str
+
 # PR Review Bot manager instance
 _pr_review_bot_manager = None
 
@@ -114,4 +130,65 @@ async def get_pr_review_bot_status():
         return status
     except Exception as e:
         logger.error(f"Error getting PR Review Bot status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/pr-review-bot/start")
+async def start_pr_review_bot():
+    """Start the PR Review Bot."""
+    manager = get_pr_review_bot_manager()
+    try:
+        result = manager.start_pr_review_bot()
+        return result
+    except Exception as e:
+        logger.error(f"Error starting PR Review Bot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/pr-review-bot/stop")
+async def stop_pr_review_bot():
+    """Stop the PR Review Bot."""
+    manager = get_pr_review_bot_manager()
+    try:
+        result = manager.stop_pr_review_bot()
+        return result
+    except Exception as e:
+        logger.error(f"Error stopping PR Review Bot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/pr-review-bot/notify-connected")
+async def notify_connected(status: BotConnectionStatus):
+    """Notify that the PR Review Bot is connected."""
+    try:
+        logger.info(f"PR Review Bot connected: {status.status}")
+        # Update the manager status
+        manager = get_pr_review_bot_manager()
+        manager.set_connection_status("connected")
+        return {"status": "success", "message": "Connection status updated"}
+    except Exception as e:
+        logger.error(f"Error updating connection status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/pr-review-bot/notify-disconnected")
+async def notify_disconnected(status: BotConnectionStatus):
+    """Notify that the PR Review Bot is disconnected."""
+    try:
+        logger.info(f"PR Review Bot disconnected: {status.status}")
+        # Update the manager status
+        manager = get_pr_review_bot_manager()
+        manager.set_connection_status("disconnected")
+        return {"status": "success", "message": "Connection status updated"}
+    except Exception as e:
+        logger.error(f"Error updating connection status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/pr-review-bot/update-status")
+async def update_pr_status(status_update: PRStatusUpdate):
+    """Update PR status."""
+    try:
+        logger.info(f"Updating PR status: {len(status_update.prs)} PRs")
+        # Update the manager with PR status
+        manager = get_pr_review_bot_manager()
+        manager.update_pr_status(status_update.prs)
+        return {"status": "success", "message": "PR status updated"}
+    except Exception as e:
+        logger.error(f"Error updating PR status: {e}")
         raise HTTPException(status_code=500, detail=str(e))

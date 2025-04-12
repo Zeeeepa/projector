@@ -123,7 +123,18 @@ class PRReviewBotService {
   /**
    * Get PR Review Bot status
    */
-  async getStatus(): Promise<{ status: string; config: PRReviewBotConfig }> {
+  async getStatus(): Promise<{ 
+    status: string; 
+    connection_status: string;
+    config: PRReviewBotConfig;
+    pr_status: Array<{
+      repo: string;
+      number: number;
+      title: string;
+      status: string;
+      url: string;
+    }>;
+  }> {
     try {
       const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/status`, {
         headers: this.getHeaders()
@@ -136,6 +147,48 @@ class PRReviewBotService {
       return await response.json();
     } catch (error) {
       console.error('Error getting PR Review Bot status:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Start the PR Review Bot
+   */
+  async startBot(): Promise<{ status: string; message: string }> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/start`, {
+        method: 'POST',
+        headers: this.getHeaders()
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error starting PR Review Bot:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Stop the PR Review Bot
+   */
+  async stopBot(): Promise<{ status: string; message: string }> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/stop`, {
+        method: 'POST',
+        headers: this.getHeaders()
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error stopping PR Review Bot:', error);
       throw error;
     }
   }
