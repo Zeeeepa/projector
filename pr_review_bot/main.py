@@ -73,6 +73,7 @@ class PRReviewBot:
         self.github_client = None
         self.monitored_repos = []
         self.last_check_time = datetime.now(timezone.utc) - timedelta(days=1)
+        self.stop_event = threading.Event()  # Add a stop event for clean shutdown
         
         # Validate configuration
         self._validate_config()
@@ -186,6 +187,7 @@ class PRReviewBot:
         
         logger.info("Starting PR Review Bot...")
         self.running = True
+        self.stop_event.clear()  # Clear the stop event
         
         # Start monitoring thread
         self.monitor_thread = threading.Thread(target=self._monitor_prs, daemon=True)
@@ -193,7 +195,7 @@ class PRReviewBot:
         
         # Keep the main thread alive
         try:
-            while self.running:
+            while self.running and not self.stop_event.is_set():
                 time.sleep(1)
         except KeyboardInterrupt:
             logger.info("Received keyboard interrupt, shutting down...")
@@ -209,6 +211,7 @@ class PRReviewBot:
         
         logger.info("Stopping PR Review Bot...")
         self.running = False
+        self.stop_event.set()  # Set the stop event to signal threads to exit
         
         # Notify Projector of disconnection
         try:
@@ -225,6 +228,8 @@ class PRReviewBot:
         # Wait for monitor thread to finish
         if hasattr(self, 'monitor_thread') and self.monitor_thread.is_alive():
             self.monitor_thread.join(timeout=5)
+            if self.monitor_thread.is_alive():
+                logger.warning("Monitor thread did not exit cleanly, forcing termination")
         
         logger.info("PR Review Bot stopped")
     
@@ -235,7 +240,7 @@ class PRReviewBot:
         """
         logger.info("Starting PR monitoring thread...")
         
-        while self.running:
+        while self.running and not self.stop_event.is_set():
             try:
                 logger.info("Checking for PR updates...")
                 
@@ -265,7 +270,7 @@ class PRReviewBot:
                                 if self.config.get("auto_review", True):
                                     # This would call the review function
                                     # For now, just log that we would review it
-                                    logger.info(f"Auto-review triggered for {repo.full_name}#{pr.number}")
+                                    logger.info(f"Auto-review enabled, would review PR: {repo.full_name}#{pr.number}")
                     
                     except GithubException as e:
                         logger.error(f"Error checking PRs for repository {repo.full_name}: {e}")
@@ -278,11 +283,15 @@ class PRReviewBot:
                     self._update_pr_status(all_prs)
                 
                 # Sleep for the configured interval before checking again
-                time.sleep(self.config.get("poll_interval", 30))
+                # Use stop_event.wait() instead of time.sleep() to allow for faster shutdown
+                self.stop_event.wait(self.config.get("poll_interval", 30))
             
             except Exception as e:
                 logger.error(f"Error in PR monitoring thread: {e}")
-                time.sleep(60)  # Sleep longer on error
+                # Use stop_event.wait() instead of time.sleep() to allow for faster shutdown
+                self.stop_event.wait(60)  # Sleep longer on error
+        
+        logger.info("PR monitoring thread exiting...")
     
     def _update_pr_status(self, prs=None) -> None:
         """
@@ -498,6 +507,9 @@ def main() -> None:
     args = parse_args()
     config = load_config(args)
     
+    # Create a global bot instance for signal handlers to access
+    global bot_instance
+    
     try:
         # Handle specific commands
         if args.command == "review":
@@ -519,11 +531,13 @@ def main() -> None:
         
         # Create bot instance for normal operation
         bot = PRReviewBot(config)
+        bot_instance = bot  # Store globally for signal handlers
         
         # Set up signal handlers
         def signal_handler(sig, frame):
             logger.info(f"Received signal {sig}, shutting down...")
-            bot.stop()
+            if 'bot_instance' in globals() and bot_instance:
+                bot_instance.stop()
             sys.exit(0)
         
         signal.signal(signal.SIGINT, signal_handler)
@@ -540,4 +554,6 @@ def main() -> None:
         sys.exit(1)
 
 if __name__ == "__main__":
+    # Initialize global bot instance
+    bot_instance = None
     main()
