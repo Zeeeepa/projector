@@ -41,6 +41,8 @@ class PRReviewBotManager:
         # PR Review Bot process
         self.pr_review_bot_process = None
         self.pr_review_bot_status = "stopped"
+        self.connection_status = "disconnected"
+        self.pr_status_list = []
     
     def _load_config(self) -> Dict[str, Any]:
         """
@@ -98,6 +100,39 @@ class PRReviewBotManager:
             self.stop_pr_review_bot()
             self.start_pr_review_bot()
     
+    def set_connection_status(self, status: str) -> None:
+        """
+        Set the connection status of the PR Review Bot.
+        
+        Args:
+            status (str): Connection status ("connected" or "disconnected")
+        """
+        self.connection_status = status
+        logger.info(f"PR Review Bot connection status set to: {status}")
+        
+        # If the bot is connected but our status is stopped, update it
+        if status == "connected" and self.pr_review_bot_status == "stopped":
+            self.pr_review_bot_status = "running"
+    
+    def update_pr_status(self, pr_status_list: List[Dict[str, Any]]) -> None:
+        """
+        Update PR status list.
+        
+        Args:
+            pr_status_list (List[Dict[str, Any]]): List of PR status dictionaries
+        """
+        self.pr_status_list = pr_status_list
+        logger.info(f"Updated PR status list with {len(pr_status_list)} PRs")
+    
+    def get_pr_status_list(self) -> List[Dict[str, Any]]:
+        """
+        Get the current PR status list.
+        
+        Returns:
+            List[Dict[str, Any]]: List of PR status dictionaries
+        """
+        return self.pr_status_list
+    
     def start_pr_review_bot(self) -> Dict[str, Any]:
         """
         Start the PR Review Bot process.
@@ -114,16 +149,16 @@ class PRReviewBotManager:
         try:
             # Start PR Review Bot process
             cmd = [
-                "python", "-m", "pr_review_bot",
-                "--config", str(self.config_path),
+                "python", "-m", "pr_review_bot.main",
+                "--github-token", self.config.get("github_token", ""),
                 "--env-file", env_file
             ]
             
-            if self.config.get("monitor_branches", True):
-                cmd.append("--monitor-branches")
-            
-            if self.config.get("setup_all_repos_webhooks", True):
-                cmd.append("--setup-webhooks")
+            # Set AI provider and key
+            if self.config.get("anthropic_api_key"):
+                cmd.extend(["--ai-provider", "anthropic", "--ai-key", self.config.get("anthropic_api_key")])
+            elif self.config.get("openai_api_key"):
+                cmd.extend(["--ai-provider", "openai", "--ai-key", self.config.get("openai_api_key")])
             
             self.pr_review_bot_process = subprocess.Popen(
                 cmd,
@@ -178,7 +213,9 @@ class PRReviewBotManager:
         
         return {
             "status": self.pr_review_bot_status,
-            "config": self.config
+            "connection_status": self.connection_status,
+            "config": self.config,
+            "pr_status": self.pr_status_list
         }
     
     def review_pr(self, repo: str, pr_number: int, github_token: str) -> Dict[str, Any]:
@@ -199,11 +236,19 @@ class PRReviewBotManager:
         try:
             # Run PR review command
             cmd = [
-                "python", "-m", "pr_review_bot.review",
+                "python", "-m", "pr_review_bot.main",
+                "--github-token", github_token,
+                "--env-file", env_file,
+                "review",
                 "--repo", repo,
-                "--pr", str(pr_number),
-                "--env-file", env_file
+                "--pr", str(pr_number)
             ]
+            
+            # Set AI provider and key
+            if self.config.get("anthropic_api_key"):
+                cmd.extend(["--ai-provider", "anthropic", "--ai-key", self.config.get("anthropic_api_key")])
+            elif self.config.get("openai_api_key"):
+                cmd.extend(["--ai-provider", "openai", "--ai-key", self.config.get("openai_api_key")])
             
             result = subprocess.run(
                 cmd,
@@ -254,9 +299,10 @@ class PRReviewBotManager:
         try:
             # Run webhook setup command
             cmd = [
-                "python", "-m", "pr_review_bot.webhook_manager",
-                "--setup",
-                "--env-file", env_file
+                "python", "-m", "pr_review_bot.main",
+                "--github-token", self.config.get("github_token", ""),
+                "--env-file", env_file,
+                "setup-webhooks"
             ]
             
             if repos:
@@ -302,23 +348,23 @@ class PRReviewBotManager:
         fd, env_file = tempfile.mkstemp(suffix=".env")
         
         with os.fdopen(fd, "w") as f:
-            f.write(f"GITHUB_TOKEN={github_token or self.config.get('github_token', '')}\n")
-            f.write(f"GITHUB_WEBHOOK_SECRET={self.config.get('webhook_secret', '')}\n")
+            f.write(f"GITHUB_TOKEN={github_token or self.config.get('github_token', '')}\\n")
+            f.write(f"GITHUB_WEBHOOK_SECRET={self.config.get('webhook_secret', '')}\\n")
             
             if self.config.get("anthropic_api_key"):
-                f.write(f"ANTHROPIC_API_KEY={self.config.get('anthropic_api_key')}\n")
+                f.write(f"ANTHROPIC_API_KEY={self.config.get('anthropic_api_key')}\\n")
             
             if self.config.get("openai_api_key"):
-                f.write(f"OPENAI_API_KEY={self.config.get('openai_api_key')}\n")
+                f.write(f"OPENAI_API_KEY={self.config.get('openai_api_key')}\\n")
             
             if self.config.get("slack_bot_token"):
-                f.write(f"SLACK_BOT_TOKEN={self.config.get('slack_bot_token')}\n")
+                f.write(f"SLACK_BOT_TOKEN={self.config.get('slack_bot_token')}\\n")
             
             if self.config.get("slack_channel"):
-                f.write(f"SLACK_CHANNEL={self.config.get('slack_channel')}\n")
+                f.write(f"SLACK_CHANNEL={self.config.get('slack_channel')}\\n")
             
-            f.write("HOST=0.0.0.0\n")
-            f.write("PORT=8001\n")
-            f.write("LOG_LEVEL=INFO\n")
+            f.write("HOST=0.0.0.0\\n")
+            f.write("PORT=8001\\n")
+            f.write("LOG_LEVEL=INFO\\n")
         
         return env_file

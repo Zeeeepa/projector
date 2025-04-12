@@ -19,22 +19,18 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
   } = useProjectStore();
   
   const [configName, setConfigName] = useState('');
-  const [webhookSecret, setWebhookSecret] = useState('');
   const [githubToken, setGithubToken] = useState(apiSettings.githubToken || '');
-  const [autoReview, setAutoReview] = useState(true);
-  const [monitorBranches, setMonitorBranches] = useState(true);
-  const [setupAllReposWebhooks, setSetupAllReposWebhooks] = useState(true);
-  const [validateDocumentation, setValidateDocumentation] = useState(true);
-  const [documentationFiles, setDocumentationFiles] = useState('STRUCTURE.md,STEP-BY-STEP.md');
-  const [anthropicApiKey, setAnthropicApiKey] = useState('');
-  const [openaiApiKey, setOpenaiApiKey] = useState('');
-  const [slackBotToken, setSlackBotToken] = useState('');
-  const [slackChannel, setSlackChannel] = useState('');
+  const [aiProvider, setAiProvider] = useState<'anthropic' | 'openai'>('anthropic');
+  const [aiApiKey, setAiApiKey] = useState('');
+  const [botStatus, setBotStatus] = useState<'stopped' | 'running' | 'error'>('stopped');
+  const [botConnectionStatus, setBotConnectionStatus] = useState<'connected' | 'disconnected'>('disconnected');
   
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'saved_configs' | 'new_config'>('saved_configs');
+  const [isStartingBot, setIsStartingBot] = useState(false);
+  const [isStoppingBot, setIsStoppingBot] = useState(false);
   
   // Initialize PR Review Bot service with API base URL
   useEffect(() => {
@@ -48,17 +44,16 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
       if (activeConfig) {
         setEditingConfigId(activeConfig.id);
         setConfigName(activeConfig.name);
-        setWebhookSecret(activeConfig.webhookSecret);
         setGithubToken(activeConfig.githubToken);
-        setAutoReview(activeConfig.autoReview);
-        setMonitorBranches(activeConfig.monitorBranches);
-        setSetupAllReposWebhooks(activeConfig.setupAllReposWebhooks);
-        setValidateDocumentation(activeConfig.validateDocumentation);
-        setDocumentationFiles(activeConfig.documentationFiles.join(','));
-        setAnthropicApiKey(activeConfig.anthropicApiKey || '');
-        setOpenaiApiKey(activeConfig.openaiApiKey || '');
-        setSlackBotToken(activeConfig.slackBotToken || '');
-        setSlackChannel(activeConfig.slackChannel || '');
+        
+        // Determine AI provider and key
+        if (activeConfig.anthropic_api_key) {
+          setAiProvider('anthropic');
+          setAiApiKey(activeConfig.anthropic_api_key);
+        } else if (activeConfig.openai_api_key) {
+          setAiProvider('openai');
+          setAiApiKey(activeConfig.openai_api_key);
+        }
         
         // Set active config in service
         prReviewBotService.setActiveConfig(activeConfig);
@@ -69,44 +64,57 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
     }
   }, [activePRReviewBotConfigId, prReviewBotConfigs]);
   
+  // Fetch bot status periodically
+  useEffect(() => {
+    const fetchBotStatus = async () => {
+      try {
+        const status = await prReviewBotService.getStatus();
+        setBotStatus(status.status);
+        setBotConnectionStatus(status.connection_status);
+      } catch (error) {
+        console.error('Error fetching bot status:', error);
+      }
+    };
+    
+    fetchBotStatus();
+    const interval = setInterval(fetchBotStatus, 5000); // Check every 5 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+  
   const resetConfigForm = () => {
     setEditingConfigId(null);
     setConfigName('');
-    setWebhookSecret('');
     setGithubToken(apiSettings.githubToken || '');
-    setAutoReview(true);
-    setMonitorBranches(true);
-    setSetupAllReposWebhooks(true);
-    setValidateDocumentation(true);
-    setDocumentationFiles('STRUCTURE.md,STEP-BY-STEP.md');
-    setAnthropicApiKey('');
-    setOpenaiApiKey('');
-    setSlackBotToken('');
-    setSlackChannel('');
+    setAiProvider('anthropic');
+    setAiApiKey('');
     setTestResult(null);
   };
   
   const handleSaveConfig = () => {
-    if (!configName || !webhookSecret || !githubToken) {
-      alert('Configuration name, webhook secret, and GitHub token are required');
+    if (!configName || !githubToken || !aiApiKey) {
+      alert('Configuration name, GitHub token, and AI API key are required');
       return;
     }
     
     const configData: Omit<PRReviewBotConfig, 'id'> = {
       name: configName,
-      webhookSecret,
       githubToken,
-      autoReview,
-      monitorBranches,
-      setupAllReposWebhooks,
-      validateDocumentation,
-      documentationFiles: documentationFiles.split(',').map(file => file.trim()),
-      anthropicApiKey: anthropicApiKey || undefined,
-      openaiApiKey: openaiApiKey || undefined,
-      slackBotToken: slackBotToken || undefined,
-      slackChannel: slackChannel || undefined,
+      webhook_secret: 'webhook_secret', // Default value
+      auto_review: true,
+      monitor_branches: true,
+      setup_all_repos_webhooks: true,
+      validate_documentation: true,
+      documentation_files: ['STRUCTURE.md', 'STEP-BY-STEP.md'],
       isVerified: testResult?.success || false
     };
+    
+    // Set the appropriate API key based on provider
+    if (aiProvider === 'anthropic') {
+      configData.anthropic_api_key = aiApiKey;
+    } else {
+      configData.openai_api_key = aiApiKey;
+    }
     
     if (editingConfigId) {
       updatePRReviewBotConfig(editingConfigId, configData);
@@ -127,17 +135,19 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
   const handleEditConfig = (config: PRReviewBotConfig) => {
     setEditingConfigId(config.id);
     setConfigName(config.name);
-    setWebhookSecret(config.webhookSecret);
     setGithubToken(config.githubToken);
-    setAutoReview(config.autoReview);
-    setMonitorBranches(config.monitorBranches);
-    setSetupAllReposWebhooks(config.setupAllReposWebhooks);
-    setValidateDocumentation(config.validateDocumentation);
-    setDocumentationFiles(config.documentationFiles.join(','));
-    setAnthropicApiKey(config.anthropicApiKey || '');
-    setOpenaiApiKey(config.openaiApiKey || '');
-    setSlackBotToken(config.slackBotToken || '');
-    setSlackChannel(config.slackChannel || '');
+    
+    // Determine AI provider and key
+    if (config.anthropic_api_key) {
+      setAiProvider('anthropic');
+      setAiApiKey(config.anthropic_api_key || '');
+    } else if (config.openai_api_key) {
+      setAiProvider('openai');
+      setAiApiKey(config.openai_api_key || '');
+    } else {
+      setAiProvider('anthropic');
+      setAiApiKey('');
+    }
     
     setTestResult(config.isVerified ? { success: true, message: 'Configuration verified' } : null);
     
@@ -154,7 +164,7 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
   };
   
   const testConnection = async () => {
-    if (!webhookSecret || !githubToken) return;
+    if (!githubToken || !aiApiKey) return;
     
     setIsTesting(true);
     setTestResult(null);
@@ -162,18 +172,21 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
     try {
       // Create a temporary config for testing
       const tempConfig: Partial<PRReviewBotConfig> = {
-        webhookSecret,
         githubToken,
-        autoReview,
-        monitorBranches,
-        setupAllReposWebhooks,
-        validateDocumentation,
-        documentationFiles: documentationFiles.split(',').map(file => file.trim()),
-        anthropicApiKey: anthropicApiKey || undefined,
-        openaiApiKey: openaiApiKey || undefined,
-        slackBotToken: slackBotToken || undefined,
-        slackChannel: slackChannel || undefined
+        webhook_secret: 'webhook_secret', // Default value
+        auto_review: true,
+        monitor_branches: true,
+        setup_all_repos_webhooks: true,
+        validate_documentation: true,
+        documentation_files: ['STRUCTURE.md', 'STEP-BY-STEP.md']
       };
+      
+      // Set the appropriate API key based on provider
+      if (aiProvider === 'anthropic') {
+        tempConfig.anthropic_api_key = aiApiKey;
+      } else {
+        tempConfig.openai_api_key = aiApiKey;
+      }
       
       const result = await prReviewBotService.updateConfig(tempConfig);
       
@@ -189,6 +202,43 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
       });
     } finally {
       setIsTesting(false);
+    }
+  };
+  
+  const startBot = async () => {
+    if (!activePRReviewBotConfigId) {
+      alert('Please select a configuration first');
+      return;
+    }
+    
+    setIsStartingBot(true);
+    
+    try {
+      const result = await prReviewBotService.startBot();
+      if (result.status === 'started' || result.status === 'already_running') {
+        setBotStatus('running');
+      }
+    } catch (error) {
+      console.error('Error starting PR Review Bot:', error);
+      alert('Failed to start PR Review Bot');
+    } finally {
+      setIsStartingBot(false);
+    }
+  };
+  
+  const stopBot = async () => {
+    setIsStoppingBot(true);
+    
+    try {
+      const result = await prReviewBotService.stopBot();
+      if (result.status === 'stopped' || result.status === 'not_running' || result.status === 'killed') {
+        setBotStatus('stopped');
+      }
+    } catch (error) {
+      console.error('Error stopping PR Review Bot:', error);
+      alert('Failed to stop PR Review Bot');
+    } finally {
+      setIsStoppingBot(false);
     }
   };
   
@@ -259,27 +309,42 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
                         )}
                       </p>
                       <div className="mt-2 text-sm text-gray-400">
-                        <p>Webhook Secret: {config.webhookSecret.substring(0, 3)}***</p>
-                        <p>Auto Review: {config.autoReview ? 'Yes' : 'No'}</p>
-                        <p>Monitor Branches: {config.monitorBranches ? 'Yes' : 'No'}</p>
-                        <p>Setup All Repos Webhooks: {config.setupAllReposWebhooks ? 'Yes' : 'No'}</p>
-                        <p>Validate Documentation: {config.validateDocumentation ? 'Yes' : 'No'}</p>
-                        <p>Documentation Files: {config.documentationFiles.join(', ')}</p>
+                        <p>GitHub Token: {config.githubToken.substring(0, 3)}***</p>
+                        <p>AI Provider: {config.anthropic_api_key ? 'Anthropic' : 'OpenAI'}</p>
                       </div>
                     </div>
-                    <div className="flex space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSetActiveConfig(config.id)}
-                        className={`px-3 py-1 text-xs font-medium rounded-md ${
-                          activePRReviewBotConfigId === config.id
-                            ? 'bg-indigo-700 text-white cursor-default'
-                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                        }`}
-                        disabled={activePRReviewBotConfigId === config.id}
-                      >
-                        {activePRReviewBotConfigId === config.id ? 'Active' : 'Use'}
-                      </button>
+                    <div className="flex flex-col space-y-2">
+                      {activePRReviewBotConfigId === config.id ? (
+                        <div className="flex space-x-2">
+                          {botStatus === 'running' ? (
+                            <button
+                              type="button"
+                              onClick={stopBot}
+                              disabled={isStoppingBot}
+                              className="px-3 py-1 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                              {isStoppingBot ? 'Stopping...' : 'Stop Bot'}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={startBot}
+                              disabled={isStartingBot}
+                              className="px-3 py-1 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                            >
+                              {isStartingBot ? 'Starting...' : 'Start Bot'}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetActiveConfig(config.id)}
+                          className="px-3 py-1 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                        >
+                          Set Active
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleEditConfig(config)}
@@ -296,6 +361,32 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
                       </button>
                     </div>
                   </div>
+                  
+                  {activePRReviewBotConfigId === config.id && (
+                    <div className="mt-3 pt-3 border-t border-gray-700">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-gray-300">Status:</span>
+                        <span className={`text-sm px-2 py-1 rounded ${
+                          botStatus === 'running' 
+                            ? 'bg-green-900 text-green-200' 
+                            : botStatus === 'error'
+                              ? 'bg-red-900 text-red-200'
+                              : 'bg-gray-700 text-gray-300'
+                        }`}>
+                          {botStatus === 'running' ? 'Running' : botStatus === 'error' ? 'Error' : 'Stopped'}
+                        </span>
+                        
+                        <span className="text-sm font-medium text-gray-300 ml-4">Connection:</span>
+                        <span className={`text-sm px-2 py-1 rounded ${
+                          botConnectionStatus === 'connected' 
+                            ? 'bg-green-900 text-green-200' 
+                            : 'bg-gray-700 text-gray-300'
+                        }`}>
+                          {botConnectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -320,23 +411,6 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
           </div>
           
           <div>
-            <label htmlFor="webhookSecret" className="block text-sm font-medium text-gray-300">
-              GitHub Webhook Secret
-            </label>
-            <input
-              type="text"
-              id="webhookSecret"
-              value={webhookSecret}
-              onChange={(e) => setWebhookSecret(e.target.value)}
-              className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-              placeholder="Enter webhook secret"
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              Secret used to verify webhook requests from GitHub
-            </p>
-          </div>
-          
-          <div>
             <label htmlFor="githubToken" className="block text-sm font-medium text-gray-300">
               GitHub Token
             </label>
@@ -353,139 +427,47 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
             </p>
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300">
+              AI Provider
+            </label>
+            <div className="mt-1 flex space-x-4">
               <label className="flex items-center">
                 <input
-                  type="checkbox"
-                  checked={autoReview}
-                  onChange={(e) => setAutoReview(e.target.checked)}
-                  className="rounded bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500"
+                  type="radio"
+                  checked={aiProvider === 'anthropic'}
+                  onChange={() => setAiProvider('anthropic')}
+                  className="rounded-full bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500"
                 />
-                <span className="ml-2 text-sm text-gray-300">Auto Review PRs</span>
+                <span className="ml-2 text-sm text-gray-300">Anthropic</span>
               </label>
-            </div>
-            
-            <div>
               <label className="flex items-center">
                 <input
-                  type="checkbox"
-                  checked={monitorBranches}
-                  onChange={(e) => setMonitorBranches(e.target.checked)}
-                  className="rounded bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500"
+                  type="radio"
+                  checked={aiProvider === 'openai'}
+                  onChange={() => setAiProvider('openai')}
+                  className="rounded-full bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500"
                 />
-                <span className="ml-2 text-sm text-gray-300">Monitor Branch Creation</span>
-              </label>
-            </div>
-            
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={setupAllReposWebhooks}
-                  onChange={(e) => setSetupAllReposWebhooks(e.target.checked)}
-                  className="rounded bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span className="ml-2 text-sm text-gray-300">Setup Webhooks for All Repos</span>
-              </label>
-            </div>
-            
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={validateDocumentation}
-                  onChange={(e) => setValidateDocumentation(e.target.checked)}
-                  className="rounded bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span className="ml-2 text-sm text-gray-300">Validate Documentation</span>
+                <span className="ml-2 text-sm text-gray-300">OpenAI</span>
               </label>
             </div>
           </div>
           
           <div>
-            <label htmlFor="documentationFiles" className="block text-sm font-medium text-gray-300">
-              Documentation Files
+            <label htmlFor="aiApiKey" className="block text-sm font-medium text-gray-300">
+              {aiProvider === 'anthropic' ? 'Anthropic API Key' : 'OpenAI API Key'}
             </label>
             <input
               type="text"
-              id="documentationFiles"
-              value={documentationFiles}
-              onChange={(e) => setDocumentationFiles(e.target.value)}
+              id="aiApiKey"
+              value={aiApiKey}
+              onChange={(e) => setAiApiKey(e.target.value)}
               className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-              placeholder="STRUCTURE.md,STEP-BY-STEP.md"
+              placeholder={`Enter ${aiProvider === 'anthropic' ? 'Anthropic' : 'OpenAI'} API key`}
             />
             <p className="mt-1 text-xs text-gray-400">
-              Comma-separated list of documentation files to validate against
+              API key for the selected AI provider
             </p>
-          </div>
-          
-          <div className="border-t border-gray-700 pt-4">
-            <h4 className="text-sm font-medium text-gray-300 mb-2">AI Provider Configuration (Optional)</h4>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="anthropicApiKey" className="block text-sm font-medium text-gray-300">
-                  Anthropic API Key
-                </label>
-                <input
-                  type="text"
-                  id="anthropicApiKey"
-                  value={anthropicApiKey}
-                  onChange={(e) => setAnthropicApiKey(e.target.value)}
-                  className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  placeholder="Enter Anthropic API key"
-                />
-              </div>
-              
-              <div>
-                <label htmlFor="openaiApiKey" className="block text-sm font-medium text-gray-300">
-                  OpenAI API Key
-                </label>
-                <input
-                  type="text"
-                  id="openaiApiKey"
-                  value={openaiApiKey}
-                  onChange={(e) => setOpenaiApiKey(e.target.value)}
-                  className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  placeholder="Enter OpenAI API key"
-                />
-              </div>
-            </div>
-          </div>
-          
-          <div className="border-t border-gray-700 pt-4">
-            <h4 className="text-sm font-medium text-gray-300 mb-2">Slack Configuration (Optional)</h4>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="slackBotToken" className="block text-sm font-medium text-gray-300">
-                  Slack Bot Token
-                </label>
-                <input
-                  type="text"
-                  id="slackBotToken"
-                  value={slackBotToken}
-                  onChange={(e) => setSlackBotToken(e.target.value)}
-                  className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  placeholder="Enter Slack bot token"
-                />
-              </div>
-              
-              <div>
-                <label htmlFor="slackChannel" className="block text-sm font-medium text-gray-300">
-                  Slack Channel
-                </label>
-                <input
-                  type="text"
-                  id="slackChannel"
-                  value={slackChannel}
-                  onChange={(e) => setSlackChannel(e.target.value)}
-                  className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  placeholder="Enter Slack channel"
-                />
-              </div>
-            </div>
           </div>
           
           {testResult && (
@@ -501,7 +483,7 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
               className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white flex-1 ${
                 isTesting ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
               }`}
-              disabled={isTesting || !webhookSecret || !githubToken}
+              disabled={isTesting || !githubToken || !aiApiKey}
             >
               {isTesting ? 'Testing...' : 'Test Connection'}
             </button>
@@ -510,7 +492,7 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
               type="button"
               onClick={handleSaveConfig}
               className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 flex-1"
-              disabled={!configName || !webhookSecret || !githubToken}
+              disabled={!configName || !githubToken || !aiApiKey}
             >
               {editingConfigId ? 'Update Configuration' : 'Save Configuration'}
             </button>

@@ -42,17 +42,17 @@ export interface SlackConfig {
 export interface PRReviewBotConfig {
   id: string;
   name: string;
-  webhookSecret: string;
   githubToken: string;
-  autoReview: boolean;
-  monitorBranches: boolean;
-  setupAllReposWebhooks: boolean;
-  validateDocumentation: boolean;
-  documentationFiles: string[];
-  anthropicApiKey?: string;
-  openaiApiKey?: string;
-  slackBotToken?: string;
-  slackChannel?: string;
+  webhook_secret: string;
+  auto_review: boolean;
+  monitor_branches: boolean;
+  setup_all_repos_webhooks: boolean;
+  validate_documentation: boolean;
+  documentation_files: string[];
+  anthropic_api_key?: string;
+  openai_api_key?: string;
+  slack_bot_token?: string;
+  slack_channel?: string;
   isVerified?: boolean;
 }
 
