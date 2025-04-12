@@ -484,6 +484,17 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                           </div>
                         ))}
                       </div>
+                    ) : (
+                      <div className="text-center py-6">
+                        <p className="text-gray-400">No AI configurations saved yet.</p>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('new_config')}
+                          className="mt-2 text-blue-400 hover:text-blue-300"
+                        >
+                          Add your first configuration
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
