@@ -52,6 +52,17 @@ class Commit(BaseModel):
     committer: Dict[str, Any]
     html_url: str
 
+class Repository(BaseModel):
+    """Model for a repository."""
+    id: int
+    name: str
+    full_name: str
+    description: Optional[str] = None
+    url: str
+    private: bool
+    fork: bool
+    default_branch: str
+
 @router.get("/repos/{owner}/{repo}/contents/{path:path}")
 async def get_repository_contents(
     owner: str,
@@ -199,7 +210,20 @@ async def get_recent_merges(
     
     return merges
 
+@router.get("/repos", response_model=List[Repository])
+async def get_repositories(
+    github_manager: GitHubManager = Depends(get_github_manager)
+):
+    """Get all repositories accessible to the authenticated user."""
+    repos = github_manager.get_repositories()
+    return repos
+
 @router.get("/")
-async def get_github_status():
+async def get_github_status(
+    github_manager: GitHubManager = Depends(get_github_manager)
+):
     """Get GitHub integration status."""
-    return {"status": "not_configured"}
+    return {
+        "status": "connected" if github_manager.is_valid_token else "not_configured",
+        "token_valid": github_manager.is_valid_token
+    }
