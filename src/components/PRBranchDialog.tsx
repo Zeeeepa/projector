@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useProjectStore } from '../store';
+import { prReviewBotService } from '../services/pr_review_bot';
 
 interface PRBranchDialogProps {
   isOpen: boolean;
@@ -7,31 +8,55 @@ interface PRBranchDialogProps {
 }
 
 const PRBranchDialog: React.FC<PRBranchDialogProps> = ({ isOpen, onClose }) => {
-  const { activeProject } = useProjectStore();
+  const { 
+    activeProject, 
+    apiSettings, 
+    prReviewBotConfigs, 
+    activePRReviewBotConfigId 
+  } = useProjectStore();
+  
   const [type, setType] = useState<'pr' | 'branch'>('pr');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [baseBranch, setBaseBranch] = useState('main');
+  const [enablePRReviewBot, setEnablePRReviewBot] = useState(false);
+  const [autoReview, setAutoReview] = useState(true);
+  const [validateDocumentation, setValidateDocumentation] = useState(true);
+  
+  useEffect(() => {
+    if (activePRReviewBotConfigId) {
+      const activeConfig = prReviewBotConfigs.find(config => config.id === activePRReviewBotConfigId);
+      if (activeConfig) {
+        setEnablePRReviewBot(true);
+        setAutoReview(activeConfig.autoReview);
+        setValidateDocumentation(activeConfig.validateDocumentation);
+      }
+    }
+  }, [activePRReviewBotConfigId, prReviewBotConfigs]);
   
   if (!isOpen) return null;
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Here you would implement the actual PR/branch creation logic
-    // For now, we'll just log the data and close the dialog
     console.log({
       type,
       name,
       description,
       baseBranch,
-      projectId: activeProject?.id
+      projectId: activeProject?.id,
+      prReviewBot: enablePRReviewBot ? {
+        autoReview,
+        validateDocumentation
+      } : null
     });
     
-    // Reset form and close dialog
     setName('');
     setDescription('');
     setBaseBranch('main');
+    setEnablePRReviewBot(false);
+    setAutoReview(true);
+    setValidateDocumentation(true);
     onClose();
   };
   
@@ -130,6 +155,51 @@ const PRBranchDialog: React.FC<PRBranchDialogProps> = ({ isOpen, onClose }) => {
                         className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                         placeholder="Describe the changes in this PR..."
                       />
+                    </div>
+                  )}
+                  
+                  {type === 'pr' && activePRReviewBotConfigId && (
+                    <div className="border-t border-gray-700 pt-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-medium text-gray-300">PR Review Bot</h4>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={enablePRReviewBot}
+                            onChange={(e) => setEnablePRReviewBot(e.target.checked)}
+                            className="rounded bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="ml-2 text-sm text-gray-300">Enable</span>
+                        </label>
+                      </div>
+                      
+                      {enablePRReviewBot && (
+                        <div className="mt-3 space-y-3">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={autoReview}
+                              onChange={(e) => setAutoReview(e.target.checked)}
+                              className="rounded bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="ml-2 text-sm text-gray-300">Auto Review</span>
+                          </label>
+                          
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={validateDocumentation}
+                              onChange={(e) => setValidateDocumentation(e.target.checked)}
+                              className="rounded bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="ml-2 text-sm text-gray-300">Validate Documentation</span>
+                          </label>
+                          
+                          <p className="text-xs text-gray-400">
+                            The PR will be automatically reviewed against project documentation (STRUCTURE.md, STEP-BY-STEP.md)
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </>

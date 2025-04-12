@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Project, ProjectStore, ChatStore, ChatMessage, APISettings, AIConfig, SlackConfig } from './types';
+import { Project, ProjectStore, ChatStore, ChatMessage, APISettings, AIConfig, SlackConfig, PRReviewBotConfig } from './types';
 
 export const useProjectStore = create<ProjectStore>()(
   persist(
@@ -19,6 +19,8 @@ export const useProjectStore = create<ProjectStore>()(
       activeAIConfigId: null,
       slackConfigs: [],
       activeSlackConfigId: null,
+      prReviewBotConfigs: [],
+      activePRReviewBotConfigId: null,
       addProject: (project) => set((state) => ({
         projects: [...state.projects, {
           ...project,
@@ -94,6 +96,31 @@ export const useProjectStore = create<ProjectStore>()(
         };
       }),
       setActiveSlackConfig: (id) => set({ activeSlackConfigId: id }),
+      addPRReviewBotConfig: (config) => set((state) => {
+        const newConfig: PRReviewBotConfig = {
+          ...config,
+          id: crypto.randomUUID(),
+        };
+        return {
+          prReviewBotConfigs: [...state.prReviewBotConfigs, newConfig],
+          activePRReviewBotConfigId: state.prReviewBotConfigs.length === 0 ? newConfig.id : state.activePRReviewBotConfigId
+        };
+      }),
+      updatePRReviewBotConfig: (id, updates) => set((state) => ({
+        prReviewBotConfigs: state.prReviewBotConfigs.map((config) => 
+          config.id === id ? { ...config, ...updates } : config
+        )
+      })),
+      deletePRReviewBotConfig: (id) => set((state) => {
+        const newConfigs = state.prReviewBotConfigs.filter((config) => config.id !== id);
+        return {
+          prReviewBotConfigs: newConfigs,
+          activePRReviewBotConfigId: state.activePRReviewBotConfigId === id 
+            ? (newConfigs.length > 0 ? newConfigs[0].id : null) 
+            : state.activePRReviewBotConfigId
+        };
+      }),
+      setActivePRReviewBotConfig: (id) => set({ activePRReviewBotConfigId: id }),
       addDocument: (projectId, document) => set((state) => ({
         projects: state.projects.map((p) => 
           p.id === projectId 
