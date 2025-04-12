@@ -29,6 +29,11 @@ from github import Github, GithubException
 from github.Repository import Repository
 from github.PullRequest import PullRequest
 
+# Import utility modules
+from .utils.ngrok_manager import NgrokManager
+from .utils.webhook_manager import WebhookManager
+from .core.github_client import GitHubClient
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -52,7 +57,10 @@ DEFAULT_CONFIG = {
     "monitor_branches": True,
     "auto_review": True,
     "poll_interval": 30,  # seconds
-    "monitor_all_repos": False
+    "monitor_all_repos": False,
+    "ngrok_enabled": False,
+    "ngrok_auth_token": "",
+    "webhook_secret": ""
 }
 
 class PRReviewBot:
@@ -73,6 +81,9 @@ class PRReviewBot:
         self.github_client = None
         self.monitored_repos = []
         self.last_check_time = datetime.now(timezone.utc) - timedelta(days=1)
+        self.ngrok_manager = None
+        self.webhook_manager = None
+        self.webhook_url = None
         
         # Validate configuration
         self._validate_config()
@@ -118,8 +129,11 @@ class PRReviewBot:
         
         # Initialize GitHub API client
         try:
-            self.github_client = Github(self.config["github_token"])
-            user = self.github_client.get_user()
+            # Create GitHub client wrapper
+            self.github_client = GitHubClient(self.config["github_token"])
+            
+            # Get user information
+            user = self.github_client.client.get_user()
             logger.info(f"GitHub API client initialized for user: {user.login}")
             
             # Get repositories to monitor
@@ -128,6 +142,35 @@ class PRReviewBot:
         except GithubException as e:
             logger.error(f"GitHub API initialization error: {e}")
             raise ValueError(f"GitHub API initialization failed: {e}")
+        
+        # Initialize ngrok if enabled
+        if self.config.get("ngrok_enabled", False):
+            logger.info("Initializing ngrok...")
+            self.ngrok_manager = NgrokManager(
+                port=self.config.get("webhook_port", 8001),
+                auth_token=self.config.get("ngrok_auth_token")
+            )
+            
+            # Start ngrok tunnel
+            self.webhook_url = self.ngrok_manager.start_tunnel()
+            if self.webhook_url:
+                logger.info(f"ngrok tunnel started at {self.webhook_url}")
+            else:
+                logger.error("Failed to start ngrok tunnel")
+        
+        # Initialize webhook manager if webhook URL is available
+        if self.webhook_url:
+            logger.info(f"Initializing webhook manager with URL {self.webhook_url}")
+            self.webhook_manager = WebhookManager(
+                github_client=self.github_client,
+                webhook_url=self.webhook_url,
+                webhook_secret=self.config.get("webhook_secret")
+            )
+            
+            # Set up webhooks for all repositories
+            if self.config.get("setup_webhooks", False):
+                logger.info("Setting up webhooks for all repositories...")
+                self.webhook_manager.setup_webhooks_for_all_repos()
         
         # Initialize AI provider
         logger.info("AI provider initialized: %s", self.config["ai_provider"])
@@ -142,19 +185,17 @@ class PRReviewBot:
         try:
             if self.config.get("monitor_all_repos", False):
                 # Get all repositories the user has access to
-                for repo in self.github_client.get_user().get_repos():
-                    self.monitored_repos.append(repo)
+                repos = self.github_client.get_repositories()
+                self.monitored_repos = repos
                 logger.info(f"Monitoring all accessible repositories: {len(self.monitored_repos)} found")
             else:
                 # Get specific repositories if provided
                 # This would be extended to read from config or other sources
-                user = self.github_client.get_user()
-                for repo in user.get_repos():
-                    if not repo.fork:  # Only monitor non-fork repositories
-                        self.monitored_repos.append(repo)
+                repos = self.github_client.get_repositories()
+                self.monitored_repos = [repo for repo in repos if not repo.get("fork", False)]
                 logger.info(f"Monitoring user's repositories: {len(self.monitored_repos)} found")
         
-        except GithubException as e:
+        except Exception as e:
             logger.error(f"Error getting repositories to monitor: {e}")
             # Continue with empty list rather than failing completely
             self.monitored_repos = []
@@ -191,6 +232,15 @@ class PRReviewBot:
         self.monitor_thread = threading.Thread(target=self._monitor_prs, daemon=True)
         self.monitor_thread.start()
         
+        # Start IP change monitor if using ngrok and webhooks
+        if self.ngrok_manager and self.webhook_manager:
+            logger.info("Starting IP change monitor...")
+            self.ip_monitor_thread = threading.Thread(
+                target=self._monitor_ip_changes,
+                daemon=True
+            )
+            self.ip_monitor_thread.start()
+        
         # Keep the main thread alive
         try:
             while self.running:
@@ -210,6 +260,11 @@ class PRReviewBot:
         logger.info("Stopping PR Review Bot...")
         self.running = False
         
+        # Stop ngrok tunnel if running
+        if self.ngrok_manager:
+            logger.info("Stopping ngrok tunnel...")
+            self.ngrok_manager.stop_tunnel()
+        
         # Notify Projector of disconnection
         try:
             response = requests.post(
@@ -226,7 +281,40 @@ class PRReviewBot:
         if hasattr(self, 'monitor_thread') and self.monitor_thread.is_alive():
             self.monitor_thread.join(timeout=5)
         
+        # Wait for IP monitor thread to finish
+        if hasattr(self, 'ip_monitor_thread') and self.ip_monitor_thread.is_alive():
+            self.ip_monitor_thread.join(timeout=5)
+        
         logger.info("PR Review Bot stopped")
+    
+    def _monitor_ip_changes(self) -> None:
+        """
+        Monitor IP changes and update webhooks if needed.
+        """
+        logger.info("Starting IP change monitor...")
+        
+        # Get initial URL
+        last_url = self.webhook_url
+        
+        while self.running:
+            time.sleep(60)  # Check every minute
+            
+            # Get current URL
+            current_url = self.ngrok_manager.get_public_url()
+            
+            # Check if URL has changed
+            if current_url and current_url != last_url:
+                logger.info(f"Public URL changed from {last_url} to {current_url}")
+                
+                # Update webhook URL
+                self.webhook_url = current_url
+                self.webhook_manager.webhook_url = current_url
+                
+                # Update webhooks for all repositories
+                self.webhook_manager.update_webhooks_for_all_repos()
+                
+                # Update last URL
+                last_url = current_url
     
     def _monitor_prs(self) -> None:
         """
@@ -244,17 +332,23 @@ class PRReviewBot:
                 
                 for repo in self.monitored_repos:
                     try:
-                        # Get open pull requests created or updated since last check
-                        open_prs = repo.get_pulls(state='open')
+                        # Get repository name
+                        repo_name = repo.get("full_name")
+                        
+                        # Get repository object
+                        github_repo = self.github_client.client.get_repo(repo_name)
+                        
+                        # Get open pull requests
+                        open_prs = github_repo.get_pulls(state='open')
                         
                         for pr in open_prs:
                             # Check if PR was created or updated since last check
                             if pr.created_at > self.last_check_time or pr.updated_at > self.last_check_time:
-                                logger.info(f"Found new/updated PR: {repo.full_name}#{pr.number} - {pr.title}")
+                                logger.info(f"Found new/updated PR: {repo_name}#{pr.number} - {pr.title}")
                                 
                                 # Add to list of PRs to track
                                 all_prs.append({
-                                    "repo": repo.full_name,
+                                    "repo": repo_name,
                                     "number": pr.number,
                                     "title": pr.title,
                                     "status": "under_review",
@@ -265,10 +359,10 @@ class PRReviewBot:
                                 if self.config.get("auto_review", True):
                                     # This would call the review function
                                     # For now, just log that we would review it
-                                    logger.info(f"Auto-review triggered for {repo.full_name}#{pr.number}")
+                                    logger.info(f"Auto-review enabled, would review PR: {repo_name}#{pr.number}")
                     
                     except GithubException as e:
-                        logger.error(f"Error checking PRs for repository {repo.full_name}: {e}")
+                        logger.error(f"Error checking PRs for repository {repo.get('full_name')}: {e}")
                 
                 # Update last check time
                 self.last_check_time = datetime.now(timezone.utc)
@@ -336,7 +430,7 @@ class PRReviewBot:
             logger.info(f"Reviewing PR {repo_name}#{pr_number}")
             
             # Get repository and PR
-            repo = self.github_client.get_repo(repo_name)
+            repo = self.github_client.client.get_repo(repo_name)
             pr = repo.get_pull(pr_number)
             
             # Perform review (this would be implemented with AI provider)
@@ -396,6 +490,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--env-file", help="Path to .env file")
     parser.add_argument("--monitor-all-repos", action="store_true", help="Monitor all accessible repositories")
     parser.add_argument("--poll-interval", type=int, default=30, help="Polling interval in seconds")
+    
+    # Webhook and ngrok settings
+    parser.add_argument("--ngrok", action="store_true", help="Use ngrok to expose the server")
+    parser.add_argument("--ngrok-auth-token", help="Ngrok auth token")
+    parser.add_argument("--webhook-port", type=int, default=8001, help="Port for webhook server")
+    parser.add_argument("--webhook-host", default="0.0.0.0", help="Host for webhook server")
+    parser.add_argument("--webhook-secret", help="Secret for webhook verification")
+    parser.add_argument("--setup-webhooks", action="store_true", help="Set up webhooks for repositories")
     
     # Subcommands
     subparsers = parser.add_subparsers(dest="command", help="Commands")
@@ -470,6 +572,24 @@ def load_config(args: argparse.Namespace) -> Dict[str, Any]:
     if args.poll_interval:
         config["poll_interval"] = args.poll_interval
     
+    if args.ngrok:
+        config["ngrok_enabled"] = True
+    
+    if args.ngrok_auth_token:
+        config["ngrok_auth_token"] = args.ngrok_auth_token
+    
+    if args.webhook_port:
+        config["webhook_port"] = args.webhook_port
+    
+    if args.webhook_host:
+        config["webhook_host"] = args.webhook_host
+    
+    if args.webhook_secret:
+        config["webhook_secret"] = args.webhook_secret
+    
+    if args.setup_webhooks:
+        config["setup_webhooks"] = True
+    
     # Load from environment variables
     if not config["github_token"] and "GITHUB_TOKEN" in os.environ:
         config["github_token"] = os.environ["GITHUB_TOKEN"]
@@ -488,6 +608,13 @@ def load_config(args: argparse.Namespace) -> Dict[str, Any]:
             config["poll_interval"] = int(os.environ["POLL_INTERVAL"])
         except ValueError:
             pass
+    
+    if "NGROK_AUTH_TOKEN" in os.environ:
+        config["ngrok_auth_token"] = os.environ["NGROK_AUTH_TOKEN"]
+        config["ngrok_enabled"] = True
+    
+    if "WEBHOOK_SECRET" in os.environ:
+        config["webhook_secret"] = os.environ["WEBHOOK_SECRET"]
     
     return config
 
@@ -513,8 +640,13 @@ def main() -> None:
         
         elif args.command == "setup-webhooks":
             # This would set up webhooks for repositories
-            # For now, just log that we would set up webhooks
-            logger.info("Setting up webhooks is not yet implemented")
+            config["setup_webhooks"] = True
+            config["ngrok_enabled"] = True
+            
+            # Create bot instance
+            bot = PRReviewBot(config)
+            
+            # Exit after setting up webhooks
             sys.exit(0)
         
         # Create bot instance for normal operation
