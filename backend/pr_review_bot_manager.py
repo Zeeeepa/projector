@@ -35,8 +35,8 @@ class PRReviewBotManager:
             "slack_channel": "",
             "instructions": "",
             "poll_interval": 30,  # seconds
-            "monitor_all_repos": False,
-            "ngrok_enabled": False,
+            "monitor_all_repos": True,  # Changed to True by default
+            "ngrok_enabled": True,  # Changed to True by default
             "ngrok_auth_token": "",
             "webhook_port": 8001,
             "webhook_host": "0.0.0.0"
@@ -444,11 +444,10 @@ class PRReviewBotManager:
             # Add poll interval setting
             f.write(f"POLL_INTERVAL={self.config.get('poll_interval', 30)}\n")
             
-            # Add ngrok settings
-            if self.config.get("ngrok_enabled"):
-                f.write(f"NGROK_ENABLED=true\n")
-                if self.config.get("ngrok_auth_token"):
-                    f.write(f"NGROK_AUTH_TOKEN={self.config.get('ngrok_auth_token')}\n")
+            # Add ngrok settings - always enable by default
+            f.write(f"NGROK_ENABLED={'true' if self.config.get('ngrok_enabled', True) else 'false'}\n")
+            if self.config.get("ngrok_auth_token"):
+                f.write(f"NGROK_AUTH_TOKEN={self.config.get('ngrok_auth_token')}\n")
             
             # Add webhook settings
             f.write(f"WEBHOOK_PORT={self.config.get('webhook_port', 8001)}\n")

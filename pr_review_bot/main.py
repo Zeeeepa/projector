@@ -646,6 +646,15 @@ def main() -> None:
             # Create bot instance
             bot = PRReviewBot(config)
             
+            # Set up webhooks for repositories
+            if bot.webhook_manager:
+                logger.info("Setting up webhooks for repositories")
+                webhooks = bot.webhook_manager.setup_webhooks_for_all_repos()
+                print(json.dumps({"webhooks": len(webhooks), "status": "success"}, indent=2))
+            else:
+                logger.error("Webhook manager not initialized")
+                print(json.dumps({"error": "Webhook manager not initialized", "status": "error"}, indent=2))
+            
             # Exit after setting up webhooks
             sys.exit(0)
         
