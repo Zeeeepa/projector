@@ -11,6 +11,7 @@ interface GithubRepo {
   name: string;
   full_name: string;
   description: string | null;
+  initialized?: boolean;
 }
 
 export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
@@ -22,6 +23,7 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
   const [loading, setLoading] = useState(false);
   const [githubRepos, setGithubRepos] = useState<GithubRepo[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<string>('');
+  const [checkingInitialization, setCheckingInitialization] = useState(false);
   
   const { addProject, apiSettings } = useProjectStore();
 
@@ -34,13 +36,137 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
   const fetchGithubRepos = async () => {
     try {
       setLoading(true);
+      setError(null);
       const repos = await apiService.getGitHubRepositories();
-      setGithubRepos(repos);
+      
+      const reposWithInitStatus = await Promise.all(
+        repos.map(async (repo) => {
+          try {
+            const initStatus = await checkRepoInitialization(repo.full_name);
+            return { ...repo, initialized: initStatus };
+          } catch (err) {
+            console.error(`Error checking initialization for ${repo.full_name}:`, err);
+            return { ...repo, initialized: false };
+          }
+        })
+      );
+      
+      setGithubRepos(reposWithInitStatus);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching GitHub repositories:', error);
       setError('Failed to fetch GitHub repositories. Please check your GitHub token in settings.');
       setLoading(false);
+    }
+  };
+
+  const checkRepoInitialization = async (repoFullName: string): Promise<boolean> => {
+    try {
+      const files = ['README.md', 'STRUCTURE.md', 'STEP-BY-STEP.md'];
+      const results = await Promise.all(
+        files.map(async (file) => {
+          try {
+            const response = await fetch(`https://api.github.com/repos/${repoFullName}/contents/${file}`, {
+              headers: {
+                'Authorization': `token ${apiSettings.githubToken}`,
+                'Accept': 'application/vnd.github+json'
+              }
+            });
+            return response.ok;
+          } catch (err) {
+            return false;
+          }
+        })
+      );
+      
+      return results.every(exists => exists);
+    } catch (error) {
+      console.error(`Error checking initialization for ${repoFullName}:`, error);
+      return false;
+    }
+  };
+
+  const initializeRepository = async (repoFullName: string) => {
+    try {
+      setCheckingInitialization(true);
+      setError(null);
+      
+      const files = ['README.md', 'STRUCTURE.md', 'STEP-BY-STEP.md'];
+      const fileExistence = await Promise.all(
+        files.map(async (file) => {
+          try {
+            const response = await fetch(`https://api.github.com/repos/${repoFullName}/contents/${file}`, {
+              headers: {
+                'Authorization': `token ${apiSettings.githubToken}`,
+                'Accept': 'application/vnd.github+json'
+              }
+            });
+            return { file, exists: response.ok };
+          } catch (err) {
+            return { file, exists: false };
+          }
+        })
+      );
+      
+      const filesToCreate = fileExistence.filter(f => !f.exists).map(f => f.file);
+      
+      if (filesToCreate.length === 0) {
+        setCheckingInitialization(false);
+        return true;
+      }
+      
+      await Promise.all(
+        filesToCreate.map(async (file) => {
+          const content = getDefaultFileContent(file);
+          const encodedContent = btoa(content);
+          
+          const response = await fetch(`https://api.github.com/repos/${repoFullName}/contents/${file}`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `token ${apiSettings.githubToken}`,
+              'Accept': 'application/vnd.github+json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: `Initialize project with ${file}`,
+              content: encodedContent
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to create ${file}: ${response.statusText}`);
+          }
+          
+          return response.ok;
+        })
+      );
+      
+      setGithubRepos(prevRepos => 
+        prevRepos.map(repo => 
+          repo.full_name === repoFullName ? { ...repo, initialized: true } : repo
+        )
+      );
+      
+      setCheckingInitialization(false);
+      return true;
+    } catch (error) {
+      console.error(`Error initializing repository ${repoFullName}:`, error);
+      setError(`Failed to initialize repository: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setCheckingInitialization(false);
+      return false;
+    }
+  };
+
+  const getDefaultFileContent = (fileName: string): string => {
+    switch (fileName) {
+      case 'README.md':
+        return `# ${selectedRepo.split('/')[1] || 'Project'}\n\nThis is the README file for the project.\n`;
+      case 'STRUCTURE.md':
+        return `# Project Structure\n\nThis document outlines the structure of the project.\n`;
+      case 'STEP-BY-STEP.md':
+        return `# Step-by-Step Development Guide\n\nThis document provides a step-by-step guide for developing this project.\n`;
+      default:
+        return '';
     }
   };
 
@@ -75,7 +201,8 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
         description,
         githubUrl,
         slackChannel,
-        threads: 2 // Default value, can be changed in project tab
+        threads: 2,
+        initialized: selectedRepo ? githubRepos.find(r => r.full_name === selectedRepo)?.initialized || false : false
       });
 
       resetForm();
@@ -147,19 +274,42 @@ export function ProjectDialog({ isOpen, onClose }: ProjectDialogProps) {
               {loading ? (
                 <div className="mt-1 text-gray-400">Loading repositories...</div>
               ) : githubRepos.length > 0 ? (
-                <select
-                  id="githubRepo"
-                  value={selectedRepo}
-                  onChange={handleRepoSelect}
-                  className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                >
-                  <option value="">Select a repository</option>
-                  {githubRepos.map(repo => (
-                    <option key={repo.full_name} value={repo.full_name}>
-                      {repo.full_name}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    id="githubRepo"
+                    value={selectedRepo}
+                    onChange={handleRepoSelect}
+                    className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  >
+                    <option value="">Select a repository</option>
+                    {githubRepos.map(repo => (
+                      <option key={repo.full_name} value={repo.full_name}>
+                        {repo.full_name} {repo.initialized ? '(Initialized)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {selectedRepo && (
+                    <div className="mt-2">
+                      {checkingInitialization ? (
+                        <div className="text-blue-400">Checking repository...</div>
+                      ) : githubRepos.find(r => r.full_name === selectedRepo)?.initialized ? (
+                        <div className="text-green-400">✓ Repository is initialized with required files</div>
+                      ) : (
+                        <div className="flex items-center">
+                          <span className="text-yellow-400 mr-2">Repository needs initialization</span>
+                          <button
+                            type="button"
+                            onClick={() => initializeRepository(selectedRepo)}
+                            className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                          >
+                            Initialize
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               ) : apiSettings.githubToken ? (
                 <div className="mt-1 text-yellow-400">
                   No repositories found. Make sure your GitHub token has the correct permissions.
