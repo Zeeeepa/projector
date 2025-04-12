@@ -196,6 +196,20 @@ class APIService {
     }
     
     try {
+      // First, validate the token by checking the user endpoint
+      const userResponse = await fetch('https://api.github.com/user', {
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'Authorization': `token ${this.githubToken}`,
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+      
+      if (!userResponse.ok) {
+        throw new Error(`GitHub API error: ${userResponse.status} - Invalid token or insufficient permissions`);
+      }
+      
+      // Then fetch repositories
       const response = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100', {
         headers: {
           'Accept': 'application/vnd.github+json',

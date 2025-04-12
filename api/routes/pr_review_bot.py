@@ -10,7 +10,8 @@ from pydantic import BaseModel
 # Import PR Review Bot manager
 from backend.pr_review_bot_manager import PRReviewBotManager
 
-router = APIRouter(tags=["pr_review_bot"])
+# Initialize the router with a prefix
+router = APIRouter(prefix="/pr-review-bot", tags=["pr_review_bot"])
 logger = logging.getLogger(__name__)
 
 # Models
@@ -68,13 +69,13 @@ def get_pr_review_bot_manager():
         _pr_review_bot_manager = PRReviewBotManager()
     return _pr_review_bot_manager
 
-@router.get("/pr-review-bot/config")
+@router.get("/config")
 async def get_pr_review_bot_config():
     """Get PR Review Bot configuration."""
     manager = get_pr_review_bot_manager()
     return manager.get_config()
 
-@router.post("/pr-review-bot/config")
+@router.post("/config")
 async def update_pr_review_bot_config(config: PRReviewBotConfig):
     """Update PR Review Bot configuration."""
     manager = get_pr_review_bot_manager()
@@ -85,7 +86,7 @@ async def update_pr_review_bot_config(config: PRReviewBotConfig):
         logger.error(f"Error updating PR Review Bot configuration: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/pr-review-bot/review/{repo}/{pr_number}")
+@router.post("/review/{repo}/{pr_number}")
 async def trigger_pr_review(repo: str, pr_number: int, x_github_token: Optional[str] = Header(None)):
     """Trigger a PR review manually."""
     manager = get_pr_review_bot_manager()
@@ -107,7 +108,7 @@ async def trigger_pr_review(repo: str, pr_number: int, x_github_token: Optional[
         logger.error(f"Error reviewing PR {pr_number} in {repo}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/pr-review-bot/setup-webhooks")
+@router.post("/setup-webhooks")
 async def setup_webhooks(repos: Optional[List[str]] = None):
     """Set up webhooks for repositories."""
     manager = get_pr_review_bot_manager()
@@ -122,7 +123,7 @@ async def setup_webhooks(repos: Optional[List[str]] = None):
         logger.error(f"Error setting up webhooks: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/pr-review-bot/status")
+@router.get("/status")
 async def get_pr_review_bot_status():
     """Get PR Review Bot status."""
     manager = get_pr_review_bot_manager()
@@ -133,7 +134,7 @@ async def get_pr_review_bot_status():
         logger.error(f"Error getting PR Review Bot status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/pr-review-bot/start")
+@router.post("/start")
 async def start_pr_review_bot():
     """Start the PR Review Bot."""
     manager = get_pr_review_bot_manager()
@@ -144,7 +145,7 @@ async def start_pr_review_bot():
         logger.error(f"Error starting PR Review Bot: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/pr-review-bot/stop")
+@router.post("/stop")
 async def stop_pr_review_bot():
     """Stop the PR Review Bot."""
     manager = get_pr_review_bot_manager()
@@ -155,7 +156,7 @@ async def stop_pr_review_bot():
         logger.error(f"Error stopping PR Review Bot: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/pr-review-bot/notify-connected")
+@router.post("/notify-connected")
 async def notify_connected(status: BotConnectionStatus):
     """Notify that the PR Review Bot is connected."""
     try:
@@ -168,7 +169,7 @@ async def notify_connected(status: BotConnectionStatus):
         logger.error(f"Error updating connection status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/pr-review-bot/notify-disconnected")
+@router.post("/notify-disconnected")
 async def notify_disconnected(status: BotConnectionStatus):
     """Notify that the PR Review Bot is disconnected."""
     try:
@@ -181,7 +182,7 @@ async def notify_disconnected(status: BotConnectionStatus):
         logger.error(f"Error updating connection status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/pr-review-bot/update-status")
+@router.post("/update-status")
 async def update_pr_status(status_update: PRStatusUpdate):
     """Update PR status."""
     try:
