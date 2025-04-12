@@ -124,7 +124,7 @@ class PRReviewBot:
         """
         try:
             response = requests.post(
-                f"{self.config['projector_api_url']}/api/pr_review_bot/notify-connected",
+                f"{self.config['projector_api_url']}/api/pr-review-bot/notify-connected",
                 json={"status": "connected"},
                 headers={"Content-Type": "application/json"}
             )
@@ -175,7 +175,7 @@ class PRReviewBot:
         # Notify Projector of disconnection
         try:
             response = requests.post(
-                f"{self.config['projector_api_url']}/api/pr_review_bot/notify-disconnected",
+                f"{self.config['projector_api_url']}/api/pr-review-bot/notify-disconnected",
                 json={"status": "disconnected"},
                 headers={"Content-Type": "application/json"}
             )
@@ -236,7 +236,7 @@ class PRReviewBot:
                 }
                 
                 requests.post(
-                    f"{self.config['projector_api_url']}/api/pr_review_bot/update-status",
+                    f"{self.config['projector_api_url']}/api/pr-review-bot/update-status",
                     json=pr_status_data,
                     headers={"Content-Type": "application/json"}
                 )
@@ -247,7 +247,7 @@ class PRReviewBot:
         """Update PR status in Projector."""
         try:
             response = requests.post(
-                f"{self.config['projector_api_url']}/api/pr_review_bot/update-status",
+                f"{self.config['projector_api_url']}/api/pr-review-bot/update-status",
                 json={"prs": prs},
                 headers={"Content-Type": "application/json"}
             )

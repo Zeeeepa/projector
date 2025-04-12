@@ -21,20 +21,48 @@ class GitHubManager:
             access_token: GitHub access token. If not provided, will try to get from environment.
         """
         self.access_token = access_token or os.getenv("GITHUB_ACCESS_TOKEN")
+        self.github = None
+        self.is_valid_token = False
+        
         if not self.access_token:
             logger.warning("GitHub access token not provided")
-            self.github = None
         else:
+            self.validate_token()
+    
+    def validate_token(self) -> bool:
+        """
+        Validate the GitHub token by making API calls.
+        
+        Returns:
+            bool: True if token is valid, False otherwise
+        """
+        if not self.access_token:
+            return False
+            
+        try:
             self.github = Github(self.access_token)
-            # Validate token by making a simple API call
-            try:
-                # Try to get the authenticated user to validate the token
-                user = self.github.get_user()
-                user.login  # This will trigger an API call
-                logger.info(f"GitHub token validated for user: {user.login}")
-            except GithubException as e:
-                logger.error(f"Invalid GitHub token: {e}")
-                self.github = None
+            
+            # Try to get the authenticated user to validate the token
+            user = self.github.get_user()
+            login = user.login  # This will trigger an API call
+            
+            # Try to list repositories to check permissions
+            repos = list(user.get_repos()[:1])  # Just get the first repo to check permissions
+            
+            logger.info(f"GitHub token validated for user: {login}")
+            self.is_valid_token = True
+            return True
+            
+        except GithubException as e:
+            logger.error(f"Invalid GitHub token or insufficient permissions: {e}")
+            self.github = None
+            self.is_valid_token = False
+            return False
+        except Exception as e:
+            logger.error(f"Error validating GitHub token: {e}")
+            self.github = None
+            self.is_valid_token = False
+            return False
     
     def get_repository(self, owner: str, repo: str) -> Optional[Repository.Repository]:
         """
@@ -48,8 +76,9 @@ class GitHubManager:
             Repository object or None if not found
         """
         if not self.github:
-            logger.error("GitHub client not initialized")
-            return None
+            if not self.validate_token():
+                logger.error("GitHub client not initialized - invalid token")
+                return None
         
         try:
             return self.github.get_repo(f"{owner}/{repo}")

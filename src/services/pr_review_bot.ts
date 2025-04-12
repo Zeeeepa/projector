@@ -48,7 +48,7 @@ class PRReviewBotService {
    */
   async getConfig(): Promise<PRReviewBotConfig> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/config`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/config`, {
         headers: this.getHeaders()
       });
       
@@ -68,7 +68,7 @@ class PRReviewBotService {
    */
   async updateConfig(config: PRReviewBotConfig): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/config`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/config`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(config)
@@ -90,7 +90,7 @@ class PRReviewBotService {
    */
   async reviewPR(repo: string, prNumber: number): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/review/${repo}/${prNumber}`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/review/${repo}/${prNumber}`, {
         method: 'POST',
         headers: this.getHeaders()
       });
@@ -111,7 +111,7 @@ class PRReviewBotService {
    */
   async setupWebhooks(repos?: string[]): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/setup-webhooks`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/setup-webhooks`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({ repos })
@@ -138,7 +138,7 @@ class PRReviewBotService {
     pr_status: PRStatus[];
   }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/status`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/status`, {
         headers: this.getHeaders()
       });
       
@@ -158,7 +158,7 @@ class PRReviewBotService {
    */
   async startBot(): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/start`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/start`, {
         method: 'POST',
         headers: this.getHeaders()
       });
@@ -179,7 +179,7 @@ class PRReviewBotService {
    */
   async stopBot(): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/stop`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/stop`, {
         method: 'POST',
         headers: this.getHeaders()
       });
