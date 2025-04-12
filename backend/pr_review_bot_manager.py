@@ -1,0 +1,324 @@
+"""
+PR Review Bot Manager for the Projector application.
+"""
+import os
+import json
+import logging
+import subprocess
+import tempfile
+from typing import Dict, List, Optional, Any
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+class PRReviewBotManager:
+    """
+    Manager for PR Review Bot operations.
+    """
+    def __init__(self):
+        """Initialize the PR Review Bot manager."""
+        self.config_path = Path("config/pr_review_bot.json")
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Default configuration
+        self.default_config = {
+            "webhook_secret": "",
+            "github_token": "",
+            "auto_review": True,
+            "monitor_branches": True,
+            "setup_all_repos_webhooks": True,
+            "validate_documentation": True,
+            "documentation_files": ["STRUCTURE.md", "STEP-BY-STEP.md"],
+            "anthropic_api_key": "",
+            "openai_api_key": "",
+            "slack_bot_token": "",
+            "slack_channel": ""
+        }
+        
+        # Load or create configuration
+        self._load_config()
+        
+        # PR Review Bot process
+        self.pr_review_bot_process = None
+        self.pr_review_bot_status = "stopped"
+    
+    def _load_config(self) -> Dict[str, Any]:
+        """
+        Load configuration from file or create default.
+        
+        Returns:
+            Dict[str, Any]: Configuration dictionary
+        """
+        if self.config_path.exists():
+            try:
+                with open(self.config_path, "r") as f:
+                    self.config = json.load(f)
+                    # Ensure all default keys exist
+                    for key, value in self.default_config.items():
+                        if key not in self.config:
+                            self.config[key] = value
+            except Exception as e:
+                logger.error(f"Error loading PR Review Bot configuration: {e}")
+                self.config = self.default_config.copy()
+        else:
+            self.config = self.default_config.copy()
+            self._save_config()
+        
+        return self.config
+    
+    def _save_config(self) -> None:
+        """Save configuration to file."""
+        try:
+            with open(self.config_path, "w") as f:
+                json.dump(self.config, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving PR Review Bot configuration: {e}")
+    
+    def get_config(self) -> Dict[str, Any]:
+        """
+        Get current configuration.
+        
+        Returns:
+            Dict[str, Any]: Configuration dictionary
+        """
+        return self.config
+    
+    def update_config(self, config: Dict[str, Any]) -> None:
+        """
+        Update configuration.
+        
+        Args:
+            config (Dict[str, Any]): New configuration values
+        """
+        self.config.update(config)
+        self._save_config()
+        
+        # Restart PR Review Bot if running
+        if self.pr_review_bot_status == "running":
+            self.stop_pr_review_bot()
+            self.start_pr_review_bot()
+    
+    def start_pr_review_bot(self) -> Dict[str, Any]:
+        """
+        Start the PR Review Bot process.
+        
+        Returns:
+            Dict[str, Any]: Status information
+        """
+        if self.pr_review_bot_process is not None and self.pr_review_bot_process.poll() is None:
+            return {"status": "already_running", "message": "PR Review Bot is already running"}
+        
+        # Create .env file for PR Review Bot
+        env_file = self._create_env_file()
+        
+        try:
+            # Start PR Review Bot process
+            cmd = [
+                "python", "-m", "pr_review_bot",
+                "--config", str(self.config_path),
+                "--env-file", env_file
+            ]
+            
+            if self.config.get("monitor_branches", True):
+                cmd.append("--monitor-branches")
+            
+            if self.config.get("setup_all_repos_webhooks", True):
+                cmd.append("--setup-webhooks")
+            
+            self.pr_review_bot_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            self.pr_review_bot_status = "running"
+            return {"status": "started", "message": "PR Review Bot started successfully"}
+        except Exception as e:
+            logger.error(f"Error starting PR Review Bot: {e}")
+            self.pr_review_bot_status = "error"
+            return {"status": "error", "message": str(e)}
+    
+    def stop_pr_review_bot(self) -> Dict[str, Any]:
+        """
+        Stop the PR Review Bot process.
+        
+        Returns:
+            Dict[str, Any]: Status information
+        """
+        if self.pr_review_bot_process is None or self.pr_review_bot_process.poll() is not None:
+            self.pr_review_bot_status = "stopped"
+            return {"status": "not_running", "message": "PR Review Bot is not running"}
+        
+        try:
+            self.pr_review_bot_process.terminate()
+            self.pr_review_bot_process.wait(timeout=5)
+            self.pr_review_bot_status = "stopped"
+            return {"status": "stopped", "message": "PR Review Bot stopped successfully"}
+        except subprocess.TimeoutExpired:
+            self.pr_review_bot_process.kill()
+            self.pr_review_bot_status = "stopped"
+            return {"status": "killed", "message": "PR Review Bot killed after timeout"}
+        except Exception as e:
+            logger.error(f"Error stopping PR Review Bot: {e}")
+            return {"status": "error", "message": str(e)}
+    
+    def get_status(self) -> Dict[str, Any]:
+        """
+        Get PR Review Bot status.
+        
+        Returns:
+            Dict[str, Any]: Status information
+        """
+        if self.pr_review_bot_process is not None:
+            if self.pr_review_bot_process.poll() is None:
+                self.pr_review_bot_status = "running"
+            else:
+                self.pr_review_bot_status = "stopped"
+        
+        return {
+            "status": self.pr_review_bot_status,
+            "config": self.config
+        }
+    
+    def review_pr(self, repo: str, pr_number: int, github_token: str) -> Dict[str, Any]:
+        """
+        Review a pull request.
+        
+        Args:
+            repo (str): Repository name (owner/repo)
+            pr_number (int): Pull request number
+            github_token (str): GitHub token
+        
+        Returns:
+            Dict[str, Any]: Review result
+        """
+        # Create temporary .env file
+        env_file = self._create_env_file(github_token)
+        
+        try:
+            # Run PR review command
+            cmd = [
+                "python", "-m", "pr_review_bot.review",
+                "--repo", repo,
+                "--pr", str(pr_number),
+                "--env-file", env_file
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            # Parse output for review URL
+            review_url = None
+            for line in result.stdout.splitlines():
+                if "Review URL:" in line:
+                    review_url = line.split("Review URL:")[1].strip()
+            
+            return {
+                "status": "success",
+                "message": "PR review completed successfully",
+                "review_url": review_url,
+                "output": result.stdout
+            }
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error reviewing PR: {e.stderr}")
+            return {
+                "status": "error",
+                "message": f"Error reviewing PR: {e.stderr}",
+                "output": e.stdout
+            }
+        except Exception as e:
+            logger.error(f"Error reviewing PR: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def setup_webhooks(self, repos: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Set up webhooks for repositories.
+        
+        Args:
+            repos (Optional[List[str]]): List of repositories to set up webhooks for
+        
+        Returns:
+            Dict[str, Any]: Setup result
+        """
+        # Create temporary .env file
+        env_file = self._create_env_file()
+        
+        try:
+            # Run webhook setup command
+            cmd = [
+                "python", "-m", "pr_review_bot.webhook_manager",
+                "--setup",
+                "--env-file", env_file
+            ]
+            
+            if repos:
+                for repo in repos:
+                    cmd.extend(["--repo", repo])
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            return {
+                "status": "success",
+                "message": "Webhooks set up successfully",
+                "output": result.stdout
+            }
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error setting up webhooks: {e.stderr}")
+            return {
+                "status": "error",
+                "message": f"Error setting up webhooks: {e.stderr}",
+                "output": e.stdout
+            }
+        except Exception as e:
+            logger.error(f"Error setting up webhooks: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def _create_env_file(self, github_token: Optional[str] = None) -> str:
+        """
+        Create a temporary .env file for PR Review Bot.
+        
+        Args:
+            github_token (Optional[str]): GitHub token to use
+        
+        Returns:
+            str: Path to the .env file
+        """
+        fd, env_file = tempfile.mkstemp(suffix=".env")
+        
+        with os.fdopen(fd, "w") as f:
+            f.write(f"GITHUB_TOKEN={github_token or self.config.get('github_token', '')}\n")
+            f.write(f"GITHUB_WEBHOOK_SECRET={self.config.get('webhook_secret', '')}\n")
+            
+            if self.config.get("anthropic_api_key"):
+                f.write(f"ANTHROPIC_API_KEY={self.config.get('anthropic_api_key')}\n")
+            
+            if self.config.get("openai_api_key"):
+                f.write(f"OPENAI_API_KEY={self.config.get('openai_api_key')}\n")
+            
+            if self.config.get("slack_bot_token"):
+                f.write(f"SLACK_BOT_TOKEN={self.config.get('slack_bot_token')}\n")
+            
+            if self.config.get("slack_channel"):
+                f.write(f"SLACK_CHANNEL={self.config.get('slack_channel')}\n")
+            
+            f.write("HOST=0.0.0.0\n")
+            f.write("PORT=8001\n")
+            f.write("LOG_LEVEL=INFO\n")
+        
+        return env_file

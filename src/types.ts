@@ -39,6 +39,23 @@ export interface SlackConfig {
   isVerified?: boolean;
 }
 
+export interface PRReviewBotConfig {
+  id: string;
+  name: string;
+  webhookSecret: string;
+  githubToken: string;
+  autoReview: boolean;
+  monitorBranches: boolean;
+  setupAllReposWebhooks: boolean;
+  validateDocumentation: boolean;
+  documentationFiles: string[];
+  anthropicApiKey?: string;
+  openaiApiKey?: string;
+  slackBotToken?: string;
+  slackChannel?: string;
+  isVerified?: boolean;
+}
+
 export interface ProjectStore {
   projects: Project[];
   activeProject: Project | null;
@@ -47,6 +64,8 @@ export interface ProjectStore {
   activeAIConfigId: string | null;
   slackConfigs: SlackConfig[];
   activeSlackConfigId: string | null;
+  prReviewBotConfigs: PRReviewBotConfig[];
+  activePRReviewBotConfigId: string | null;
   addProject: (project: Omit<Project, 'id' | 'created_at' | 'initialized' | 'progress' | 'documentation'>) => void;
   setActiveProject: (project: Project) => void;
   updateProject: (id: string, updates: Partial<Project>) => void;
@@ -57,6 +76,10 @@ export interface ProjectStore {
   updateSlackConfig: (id: string, updates: Partial<SlackConfig>) => void;
   deleteSlackConfig: (id: string) => void;
   setActiveSlackConfig: (id: string | null) => void;
+  addPRReviewBotConfig: (config: Omit<PRReviewBotConfig, 'id'>) => void;
+  updatePRReviewBotConfig: (id: string, updates: Partial<PRReviewBotConfig>) => void;
+  deletePRReviewBotConfig: (id: string) => void;
+  setActivePRReviewBotConfig: (id: string | null) => void;
   addDocument: (projectId: string, document: string) => void;
   removeDocument: (projectId: string, document: string) => void;
 }

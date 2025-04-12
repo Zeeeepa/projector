@@ -9,13 +9,14 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 # Import routes
-from .routes import models, projects, chat, github, slack
+from .routes import models, projects, chat, github, slack, pr_review_bot
 
 # Import managers
 from backend.github_manager import GitHubManager
 from backend.slack_manager import SlackManager
 from backend.project_database import ProjectDatabase
 from backend.ai_user_agent import AIUserAgent
+from backend.pr_review_bot_manager import PRReviewBotManager
 
 # Load environment variables with explicit encoding
 try:
@@ -63,6 +64,7 @@ _github_manager = None
 _slack_manager = None
 _project_database = None
 _ai_user_agent = None
+_pr_review_bot_manager = None
 
 def get_github_manager():
     """
@@ -123,6 +125,18 @@ def get_ai_user_agent():
         )
     return _ai_user_agent
 
+def get_pr_review_bot_manager():
+    """
+    Get or create a PR Review Bot manager instance.
+    
+    Returns:
+        PRReviewBotManager instance
+    """
+    global _pr_review_bot_manager
+    if _pr_review_bot_manager is None:
+        _pr_review_bot_manager = PRReviewBotManager()
+    return _pr_review_bot_manager
+
 # Include routers
 app.include_router(models.router, prefix="/api")
 try:
@@ -144,6 +158,11 @@ try:
     app.include_router(slack.router, prefix="/api")
 except ImportError:
     logger.warning("Slack router not found, skipping")
+
+try:
+    app.include_router(pr_review_bot.router, prefix="/api")
+except ImportError:
+    logger.warning("PR Review Bot router not found, skipping")
 
 @app.get("/api/health")
 async def health_check():
