@@ -57,6 +57,16 @@ export interface PRReviewBotConfig {
   instructions?: string;
 }
 
+export interface PRStatus {
+  repo: string;
+  number: number;
+  title: string;
+  status: string;
+  url: string;
+  type?: 'pr' | 'branch';
+  created_at?: string;
+}
+
 export interface ProjectStore {
   projects: Project[];
   activeProject: Project | null;

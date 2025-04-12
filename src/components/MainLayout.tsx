@@ -23,6 +23,8 @@ const MainLayout: React.FC = () => {
     title: string;
     status: string;
     url: string;
+    type?: 'pr' | 'branch';
+    created_at?: string;
   }>>([]);
   const [botConnected, setBotConnected] = useState(false);
   
@@ -89,6 +91,13 @@ const MainLayout: React.FC = () => {
     }
   };
   
+  const sortedPRStatus = [...prStatus].sort((a, b) => {
+    if (a.created_at && b.created_at) {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+    return 0;
+  });
+  
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-100">
       <header className="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center shadow-md">
@@ -124,9 +133,9 @@ const MainLayout: React.FC = () => {
                 PR Review Bot Connected
               </div>
             )}
-            {prStatus.length > 0 ? (
+            {sortedPRStatus.length > 0 ? (
               <div className="space-y-2">
-                {prStatus.map((pr) => (
+                {sortedPRStatus.map((pr) => (
                   <div 
                     key={`${pr.repo}-${pr.number}`}
                     className="p-2 border border-gray-700 rounded bg-gray-900"
@@ -141,7 +150,14 @@ const MainLayout: React.FC = () => {
                         >
                           {pr.title}
                         </a>
-                        <div className="text-xs text-gray-400">{pr.repo} #{pr.number}</div>
+                        <div className="text-xs text-gray-400">
+                          {pr.repo} #{pr.number} {pr.type && `(${pr.type === 'branch' ? 'Branch' : 'PR'})`}
+                        </div>
+                        {pr.created_at && (
+                          <div className="text-xs text-gray-500">
+                            {new Date(pr.created_at).toLocaleString()}
+                          </div>
+                        )}
                       </div>
                       <span 
                         className={`text-xs px-2 py-1 rounded ${
@@ -149,11 +165,14 @@ const MainLayout: React.FC = () => {
                             ? 'bg-purple-900 text-purple-200' 
                             : pr.status === 'under_review' 
                               ? 'bg-yellow-900 text-yellow-200'
-                              : 'bg-blue-900 text-blue-200'
+                              : pr.status === 'declined'
+                                ? 'bg-red-900 text-red-200'
+                                : 'bg-blue-900 text-blue-200'
                         }`}
                       >
                         {pr.status === 'under_review' ? 'Under Review' : 
-                         pr.status === 'merged' ? 'Merged' : pr.status}
+                         pr.status === 'merged' ? 'Merged' : 
+                         pr.status === 'declined' ? 'Declined' : pr.status}
                       </span>
                     </div>
                   </div>
