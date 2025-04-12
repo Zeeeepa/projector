@@ -172,19 +172,18 @@ class PRReviewBotManager:
             
             # Add poll interval if configured
             if self.config.get("poll_interval"):
-                cmd.extend(["--poll-interval", str(self.config.get("poll_interval"))])
+                cmd.extend(["--monitor-interval", str(self.config.get("poll_interval"))])
             
             # Add monitor-all-repos flag if enabled
             if self.config.get("monitor_all_repos"):
                 cmd.append("--monitor-all-repos")
             
-            # Add ngrok flag if enabled
-            if self.config.get("ngrok_enabled"):
-                cmd.append("--ngrok")
-                
-                # Add ngrok auth token if provided
-                if self.config.get("ngrok_auth_token"):
-                    cmd.extend(["--ngrok-auth-token", self.config.get("ngrok_auth_token")])
+            # Add ngrok flag - ALWAYS enable by default
+            cmd.append("--ngrok")
+            
+            # Add ngrok auth token if provided
+            if self.config.get("ngrok_auth_token"):
+                cmd.extend(["--ngrok-auth-token", self.config.get("ngrok_auth_token")])
             
             # Add webhook settings
             if self.config.get("webhook_port"):
@@ -196,9 +195,8 @@ class PRReviewBotManager:
             if self.config.get("webhook_secret"):
                 cmd.extend(["--webhook-secret", self.config.get("webhook_secret")])
             
-            # Add setup-webhooks flag if enabled
-            if self.config.get("setup_all_repos_webhooks"):
-                cmd.append("--setup-webhooks")
+            # Add setup-webhooks flag - ALWAYS enable by default
+            cmd.append("--setup-webhooks")
             
             logger.info(f"Starting PR Review Bot with command: {' '.join(cmd)}")
             
@@ -357,13 +355,12 @@ class PRReviewBotManager:
             if self.config.get("github_token"):
                 cmd.extend(["--github-token", self.config.get("github_token")])
             
-            # Add ngrok flag if enabled
-            if self.config.get("ngrok_enabled"):
-                cmd.append("--ngrok")
-                
-                # Add ngrok auth token if provided
-                if self.config.get("ngrok_auth_token"):
-                    cmd.extend(["--ngrok-auth-token", self.config.get("ngrok_auth_token")])
+            # Add ngrok flag - ALWAYS enable by default
+            cmd.append("--ngrok")
+            
+            # Add ngrok auth token if provided
+            if self.config.get("ngrok_auth_token"):
+                cmd.extend(["--ngrok-auth-token", self.config.get("ngrok_auth_token")])
             
             # Add webhook settings
             if self.config.get("webhook_port"):
@@ -445,7 +442,7 @@ class PRReviewBotManager:
             f.write(f"POLL_INTERVAL={self.config.get('poll_interval', 30)}\n")
             
             # Add ngrok settings - always enable by default
-            f.write(f"NGROK_ENABLED={'true' if self.config.get('ngrok_enabled', True) else 'false'}\n")
+            f.write(f"NGROK_ENABLED=true\n")
             if self.config.get("ngrok_auth_token"):
                 f.write(f"NGROK_AUTH_TOKEN={self.config.get('ngrok_auth_token')}\n")
             

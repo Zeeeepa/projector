@@ -276,16 +276,6 @@ class PRReviewBot:
             logger.info("Notified Projector of disconnection")
         except Exception as e:
             logger.error(f"Failed to notify Projector of disconnection: {e}")
-        
-        # Wait for monitor thread to finish
-        if hasattr(self, 'monitor_thread') and self.monitor_thread.is_alive():
-            self.monitor_thread.join(timeout=5)
-        
-        # Wait for IP monitor thread to finish
-        if hasattr(self, 'ip_monitor_thread') and self.ip_monitor_thread.is_alive():
-            self.ip_monitor_thread.join(timeout=5)
-        
-        logger.info("PR Review Bot stopped")
     
     def _monitor_ip_changes(self) -> None:
         """
@@ -318,92 +308,65 @@ class PRReviewBot:
     
     def _monitor_prs(self) -> None:
         """
-        Monitor PRs and branches for changes.
-        This runs in a separate thread.
+        Monitor pull requests and branches.
         """
-        logger.info("Starting PR monitoring thread...")
+        logger.info(f"Starting PR monitor with interval {self.config.get('poll_interval', 30)} seconds...")
         
         while self.running:
             try:
-                logger.info("Checking for PR updates...")
+                # Get current time
+                current_time = datetime.now(timezone.utc)
                 
-                # Get all open PRs from monitored repositories
-                all_prs = []
-                
+                # Get PRs updated since last check
+                prs = []
                 for repo in self.monitored_repos:
                     try:
-                        # Get repository name
-                        repo_name = repo.get("full_name")
+                        # Get repository
+                        github_repo = self.github_client.client.get_repo(repo["full_name"])
                         
-                        # Get repository object
-                        github_repo = self.github_client.client.get_repo(repo_name)
+                        # Get open PRs
+                        open_prs = github_repo.get_pulls(state="open")
                         
-                        # Get open pull requests
-                        open_prs = github_repo.get_pulls(state='open')
-                        
+                        # Filter PRs updated since last check
                         for pr in open_prs:
-                            # Check if PR was created or updated since last check
-                            if pr.created_at > self.last_check_time or pr.updated_at > self.last_check_time:
-                                logger.info(f"Found new/updated PR: {repo_name}#{pr.number} - {pr.title}")
-                                
-                                # Add to list of PRs to track
-                                all_prs.append({
-                                    "repo": repo_name,
+                            if pr.updated_at > self.last_check_time:
+                                prs.append({
+                                    "repo": repo["full_name"],
                                     "number": pr.number,
                                     "title": pr.title,
-                                    "status": "under_review",
-                                    "url": pr.html_url
+                                    "status": "open",
+                                    "url": pr.html_url,
+                                    "updated_at": pr.updated_at.isoformat()
                                 })
-                                
-                                # If auto-review is enabled, trigger a review
-                                if self.config.get("auto_review", True):
-                                    # This would call the review function
-                                    # For now, just log that we would review it
-                                    logger.info(f"Auto-review enabled, would review PR: {repo_name}#{pr.number}")
-                    
-                    except GithubException as e:
-                        logger.error(f"Error checking PRs for repository {repo.get('full_name')}: {e}")
+                    except Exception as e:
+                        logger.error(f"Error getting PRs for repository {repo['full_name']}: {e}")
+                
+                # Update PR status
+                for pr in prs:
+                    key = f"{pr['repo']}#{pr['number']}"
+                    self.pr_status[key] = pr
                 
                 # Update last check time
-                self.last_check_time = datetime.now(timezone.utc)
+                self.last_check_time = current_time
                 
-                # Update PR status in Projector if we have any PRs to report
-                if all_prs:
-                    self._update_pr_status(all_prs)
+                # Update PR status in Projector
+                self._update_pr_status(list(self.pr_status.values()))
                 
-                # Sleep for the configured interval before checking again
+                # Sleep until next check
                 time.sleep(self.config.get("poll_interval", 30))
             
             except Exception as e:
-                logger.error(f"Error in PR monitoring thread: {e}")
-                time.sleep(60)  # Sleep longer on error
+                logger.error(f"Error monitoring PRs: {e}")
+                time.sleep(10)  # Sleep for a shorter time on error
     
-    def _update_pr_status(self, prs=None) -> None:
+    def _update_pr_status(self, prs: List[Dict[str, Any]]) -> None:
         """
         Update PR status in Projector.
         
         Args:
-            prs (List[Dict]): List of PR status dictionaries to update
+            prs (List[Dict[str, Any]]): List of PR status dictionaries
         """
         try:
-            if not self.projector_connected:
-                logger.warning("Not connected to Projector, skipping status update")
-                return
-            
-            if prs is None:
-                # If no PRs provided, use stored PR status
-                if not self.pr_status:
-                    return
-                prs = list(self.pr_status.values())
-            else:
-                # Update stored PR status
-                for pr in prs:
-                    key = f"{pr['repo']}#{pr['number']}"
-                    self.pr_status[key] = pr
-            
-            logger.info(f"Updating PR status in Projector: {len(prs)} PRs")
-            
-            # Send PR status to Projector
             response = requests.post(
                 f"{self.config['projector_api_url']}/api/pr_review_bot/update-status",
                 json={"prs": prs},
@@ -489,7 +452,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--projector-url", default="http://localhost:8000", help="URL of the Projector API")
     parser.add_argument("--env-file", help="Path to .env file")
     parser.add_argument("--monitor-all-repos", action="store_true", help="Monitor all accessible repositories")
-    parser.add_argument("--poll-interval", type=int, default=30, help="Polling interval in seconds")
+    parser.add_argument("--monitor-interval", type=int, default=30, help="Polling interval in seconds")
     
     # Webhook and ngrok settings
     parser.add_argument("--ngrok", action="store_true", help="Use ngrok to expose the server")
@@ -569,8 +532,8 @@ def load_config(args: argparse.Namespace) -> Dict[str, Any]:
     if args.monitor_all_repos:
         config["monitor_all_repos"] = True
     
-    if args.poll_interval:
-        config["poll_interval"] = args.poll_interval
+    if args.monitor_interval:
+        config["poll_interval"] = args.monitor_interval
     
     if args.ngrok:
         config["ngrok_enabled"] = True
@@ -609,9 +572,11 @@ def load_config(args: argparse.Namespace) -> Dict[str, Any]:
         except ValueError:
             pass
     
+    if "NGROK_ENABLED" in os.environ:
+        config["ngrok_enabled"] = os.environ["NGROK_ENABLED"].lower() == "true"
+    
     if "NGROK_AUTH_TOKEN" in os.environ:
         config["ngrok_auth_token"] = os.environ["NGROK_AUTH_TOKEN"]
-        config["ngrok_enabled"] = True
     
     if "WEBHOOK_SECRET" in os.environ:
         config["webhook_secret"] = os.environ["WEBHOOK_SECRET"]
