@@ -33,7 +33,9 @@ class PRReviewBotManager:
             "openai_api_key": "",
             "slack_bot_token": "",
             "slack_channel": "",
-            "instructions": ""
+            "instructions": "",
+            "poll_interval": 30,  # seconds
+            "monitor_all_repos": False
         }
         
         # Load or create configuration
@@ -164,13 +166,9 @@ class PRReviewBotManager:
             elif self.config.get("openai_api_key"):
                 cmd.extend(["--ai-provider", "openai", "--ai-key", self.config.get("openai_api_key")])
             
-            # Add auto-review flag if enabled
-            if self.config.get("auto_review"):
-                cmd.append("--auto-review")
-            
-            # Add instructions if provided
-            if self.config.get("instructions"):
-                cmd.extend(["--instructions", self.config.get("instructions")])
+            # Add poll interval if configured
+            if self.config.get("poll_interval"):
+                cmd.extend(["--poll-interval", str(self.config.get("poll_interval"))])
             
             # Add monitor-all-repos flag if enabled
             if self.config.get("setup_all_repos_webhooks"):
@@ -398,6 +396,9 @@ class PRReviewBotManager:
             
             # Add monitor-all-repos setting
             f.write(f"MONITOR_ALL_REPOS={'true' if self.config.get('setup_all_repos_webhooks') else 'false'}\n")
+            
+            # Add poll interval setting
+            f.write(f"POLL_INTERVAL={self.config.get('poll_interval', 30)}\n")
             
             # Add instructions if provided
             if self.config.get("instructions"):

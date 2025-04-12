@@ -30,6 +30,8 @@ class PRReviewBotConfig(BaseModel):
     slack_bot_token: Optional[str] = None
     slack_channel: Optional[str] = None
     instructions: Optional[str] = None
+    poll_interval: int = 30
+    monitor_all_repos: bool = False
 
 class PRReviewResponse(BaseModel):
     """PR Review response model."""
