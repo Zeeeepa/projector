@@ -22,11 +22,15 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
   const [githubToken, setGithubToken] = useState(apiSettings.githubToken || '');
   const [aiProvider, setAiProvider] = useState<'anthropic' | 'openai'>('anthropic');
   const [aiApiKey, setAiApiKey] = useState('');
+  const [botStatus, setBotStatus] = useState<'stopped' | 'running' | 'error'>('stopped');
+  const [botConnectionStatus, setBotConnectionStatus] = useState<'connected' | 'disconnected'>('disconnected');
   
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'saved_configs' | 'new_config'>('saved_configs');
+  const [isStartingBot, setIsStartingBot] = useState(false);
+  const [isStoppingBot, setIsStoppingBot] = useState(false);
   
   // Initialize PR Review Bot service with API base URL
   useEffect(() => {
@@ -42,13 +46,13 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
         setConfigName(activeConfig.name);
         setGithubToken(activeConfig.githubToken);
         
-        // Determine AI provider and set the appropriate key
-        if (activeConfig.anthropicApiKey) {
+        // Determine AI provider and key
+        if (activeConfig.anthropic_api_key) {
           setAiProvider('anthropic');
-          setAiApiKey(activeConfig.anthropicApiKey);
-        } else if (activeConfig.openaiApiKey) {
+          setAiApiKey(activeConfig.anthropic_api_key);
+        } else if (activeConfig.openai_api_key) {
           setAiProvider('openai');
-          setAiApiKey(activeConfig.openaiApiKey);
+          setAiApiKey(activeConfig.openai_api_key);
         }
         
         // Set active config in service
@@ -59,6 +63,24 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
       prReviewBotService.clearActiveConfig();
     }
   }, [activePRReviewBotConfigId, prReviewBotConfigs]);
+  
+  // Fetch bot status periodically
+  useEffect(() => {
+    const fetchBotStatus = async () => {
+      try {
+        const status = await prReviewBotService.getStatus();
+        setBotStatus(status.status);
+        setBotConnectionStatus(status.connection_status);
+      } catch (error) {
+        console.error('Error fetching bot status:', error);
+      }
+    };
+    
+    fetchBotStatus();
+    const interval = setInterval(fetchBotStatus, 5000); // Check every 5 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
   
   const resetConfigForm = () => {
     setEditingConfigId(null);
@@ -79,20 +101,20 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
     const configData: Omit<PRReviewBotConfig, 'id'> = {
       name: configName,
       githubToken,
-      webhookSecret: 'auto-generated', // Auto-generated on the server
-      autoReview: true,
-      monitorBranches: true,
-      setupAllReposWebhooks: true,
-      validateDocumentation: true,
-      documentationFiles: ['STRUCTURE.md', 'STEP-BY-STEP.md'],
+      webhook_secret: 'webhook_secret', // Default value
+      auto_review: true,
+      monitor_branches: true,
+      setup_all_repos_webhooks: true,
+      validate_documentation: true,
+      documentation_files: ['STRUCTURE.md', 'STEP-BY-STEP.md'],
       isVerified: testResult?.success || false
     };
     
-    // Set the appropriate AI API key based on the selected provider
+    // Set the appropriate API key based on provider
     if (aiProvider === 'anthropic') {
-      configData.anthropicApiKey = aiApiKey;
+      configData.anthropic_api_key = aiApiKey;
     } else {
-      configData.openaiApiKey = aiApiKey;
+      configData.openai_api_key = aiApiKey;
     }
     
     if (editingConfigId) {
@@ -116,13 +138,16 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
     setConfigName(config.name);
     setGithubToken(config.githubToken);
     
-    // Determine AI provider and set the appropriate key
-    if (config.anthropicApiKey) {
+    // Determine AI provider and key
+    if (config.anthropic_api_key) {
       setAiProvider('anthropic');
-      setAiApiKey(config.anthropicApiKey || '');
-    } else if (config.openaiApiKey) {
+      setAiApiKey(config.anthropic_api_key || '');
+    } else if (config.openai_api_key) {
       setAiProvider('openai');
-      setAiApiKey(config.openaiApiKey || '');
+      setAiApiKey(config.openai_api_key || '');
+    } else {
+      setAiProvider('anthropic');
+      setAiApiKey('');
     }
     
     setTestResult(config.isVerified ? { success: true, message: 'Configuration verified' } : null);
@@ -149,19 +174,19 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
       // Create a temporary config for testing
       const tempConfig: Partial<PRReviewBotConfig> = {
         githubToken,
-        webhookSecret: 'auto-generated',
-        autoReview: true,
-        monitorBranches: true,
-        setupAllReposWebhooks: true,
-        validateDocumentation: true,
-        documentationFiles: ['STRUCTURE.md', 'STEP-BY-STEP.md']
+        webhook_secret: 'webhook_secret', // Default value
+        auto_review: true,
+        monitor_branches: true,
+        setup_all_repos_webhooks: true,
+        validate_documentation: true,
+        documentation_files: ['STRUCTURE.md', 'STEP-BY-STEP.md']
       };
       
-      // Set the appropriate AI API key based on the selected provider
+      // Set the appropriate API key based on provider
       if (aiProvider === 'anthropic') {
-        tempConfig.anthropicApiKey = aiApiKey;
+        tempConfig.anthropic_api_key = aiApiKey;
       } else {
-        tempConfig.openaiApiKey = aiApiKey;
+        tempConfig.openai_api_key = aiApiKey;
       }
       
       const result = await prReviewBotService.updateConfig(tempConfig);
@@ -178,6 +203,43 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
       });
     } finally {
       setIsTesting(false);
+    }
+  };
+  
+  const startBot = async () => {
+    if (!activePRReviewBotConfigId) {
+      alert('Please select a configuration first');
+      return;
+    }
+    
+    setIsStartingBot(true);
+    
+    try {
+      const result = await prReviewBotService.startBot();
+      if (result.status === 'started' || result.status === 'already_running') {
+        setBotStatus('running');
+      }
+    } catch (error) {
+      console.error('Error starting PR Review Bot:', error);
+      alert('Failed to start PR Review Bot');
+    } finally {
+      setIsStartingBot(false);
+    }
+  };
+  
+  const stopBot = async () => {
+    setIsStoppingBot(true);
+    
+    try {
+      const result = await prReviewBotService.stopBot();
+      if (result.status === 'stopped' || result.status === 'not_running' || result.status === 'killed') {
+        setBotStatus('stopped');
+      }
+    } catch (error) {
+      console.error('Error stopping PR Review Bot:', error);
+      alert('Failed to stop PR Review Bot');
+    } finally {
+      setIsStoppingBot(false);
     }
   };
   
@@ -248,23 +310,42 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
                         )}
                       </p>
                       <div className="mt-2 text-sm text-gray-400">
-                        <p>AI Provider: {config.anthropicApiKey ? 'Anthropic' : 'OpenAI'}</p>
-                        <p>Auto Review: {config.autoReview ? 'Yes' : 'No'}</p>
-                        <p>Monitor Branches: {config.monitorBranches ? 'Yes' : 'No'}</p>
+                        <p>GitHub Token: {config.githubToken.substring(0, 3)}***</p>
+                        <p>AI Provider: {config.anthropic_api_key ? 'Anthropic' : 'OpenAI'}</p>
                       </div>
                     </div>
-                    <div className="flex space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSetActiveConfig(config.id)}
-                        className={`px-3 py-1 text-xs font-medium rounded-md ${
-                          activePRReviewBotConfigId === config.id
-                            ? 'bg-indigo-700 text-white'
-                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                        }`}
-                      >
-                        {activePRReviewBotConfigId === config.id ? 'Active' : 'Set Active'}
-                      </button>
+                    <div className="flex flex-col space-y-2">
+                      {activePRReviewBotConfigId === config.id ? (
+                        <div className="flex space-x-2">
+                          {botStatus === 'running' ? (
+                            <button
+                              type="button"
+                              onClick={stopBot}
+                              disabled={isStoppingBot}
+                              className="px-3 py-1 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                              {isStoppingBot ? 'Stopping...' : 'Stop Bot'}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={startBot}
+                              disabled={isStartingBot}
+                              className="px-3 py-1 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                            >
+                              {isStartingBot ? 'Starting...' : 'Start Bot'}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetActiveConfig(config.id)}
+                          className="px-3 py-1 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                        >
+                          Set Active
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleEditConfig(config)}
@@ -281,6 +362,32 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
                       </button>
                     </div>
                   </div>
+                  
+                  {activePRReviewBotConfigId === config.id && (
+                    <div className="mt-3 pt-3 border-t border-gray-700">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-gray-300">Status:</span>
+                        <span className={`text-sm px-2 py-1 rounded ${
+                          botStatus === 'running' 
+                            ? 'bg-green-900 text-green-200' 
+                            : botStatus === 'error'
+                              ? 'bg-red-900 text-red-200'
+                              : 'bg-gray-700 text-gray-300'
+                        }`}>
+                          {botStatus === 'running' ? 'Running' : botStatus === 'error' ? 'Error' : 'Stopped'}
+                        </span>
+                        
+                        <span className="text-sm font-medium text-gray-300 ml-4">Connection:</span>
+                        <span className={`text-sm px-2 py-1 rounded ${
+                          botConnectionStatus === 'connected' 
+                            ? 'bg-green-900 text-green-200' 
+                            : 'bg-gray-700 text-gray-300'
+                        }`}>
+                          {botConnectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -322,18 +429,29 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
           </div>
           
           <div>
-            <label htmlFor="aiProvider" className="block text-sm font-medium text-gray-300">
+            <label className="block text-sm font-medium text-gray-300">
               AI Provider
             </label>
-            <select
-              id="aiProvider"
-              value={aiProvider}
-              onChange={(e) => setAiProvider(e.target.value as 'anthropic' | 'openai')}
-              className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            >
-              <option value="anthropic">Anthropic (Claude)</option>
-              <option value="openai">OpenAI (GPT)</option>
-            </select>
+            <div className="mt-1 flex space-x-4">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  checked={aiProvider === 'anthropic'}
+                  onChange={() => setAiProvider('anthropic')}
+                  className="rounded-full bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="ml-2 text-sm text-gray-300">Anthropic</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  checked={aiProvider === 'openai'}
+                  onChange={() => setAiProvider('openai')}
+                  className="rounded-full bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="ml-2 text-sm text-gray-300">OpenAI</span>
+              </label>
+            </div>
           </div>
           
           <div>
@@ -349,7 +467,7 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
               placeholder={`Enter ${aiProvider === 'anthropic' ? 'Anthropic' : 'OpenAI'} API key`}
             />
             <p className="mt-1 text-xs text-gray-400">
-              API key for {aiProvider === 'anthropic' ? 'Anthropic Claude' : 'OpenAI GPT'} models
+              API key for the selected AI provider
             </p>
           </div>
           
