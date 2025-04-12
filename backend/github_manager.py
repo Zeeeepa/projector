@@ -47,8 +47,13 @@ class GitHubManager:
             login = user.login  # This will trigger an API call
             
             # Try to list repositories to check permissions
-            repos = list(user.get_repos()[:1])  # Just get the first repo to check permissions
-            
+            try:
+                repos = list(user.get_repos()[:1])  # Just get the first repo to check permissions
+            except GithubException as e:
+                # If we can get the user but not repos, token might have limited scope
+                # Still consider it valid for basic operations
+                logger.warning(f"GitHub token has limited scope: {e}")
+                
             logger.info(f"GitHub token validated for user: {login}")
             self.is_valid_token = True
             return True
@@ -381,3 +386,42 @@ class GitHubManager:
         except GithubException as e:
             logger.error(f"Error getting recent merges for {owner}/{repo}: {e}")
             return None
+    
+    def get_repositories(self) -> List[Dict[str, Any]]:
+        """
+        Get all repositories accessible to the authenticated user.
+        
+        Returns:
+            List of repository dictionaries
+        """
+        if not self.github:
+            if not self.validate_token():
+                logger.error("GitHub client not initialized - invalid token")
+                return []
+        
+        try:
+            user = self.github.get_user()
+            repos = []
+            
+            # Try to get repositories
+            try:
+                for repo in user.get_repos():
+                    repos.append({
+                        "id": repo.id,
+                        "name": repo.name,
+                        "full_name": repo.full_name,
+                        "description": repo.description,
+                        "url": repo.html_url,
+                        "private": repo.private,
+                        "fork": repo.fork,
+                        "default_branch": repo.default_branch
+                    })
+            except GithubException as e:
+                logger.error(f"Error getting repositories: {e}")
+                # Return empty list but don't invalidate the token
+                # as it might have limited scope
+            
+            return repos
+        except Exception as e:
+            logger.error(f"Error getting repositories: {e}")
+            return []

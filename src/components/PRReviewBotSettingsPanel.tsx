@@ -35,15 +35,20 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
   const [activeTab, setActiveTab] = useState<'configuration' | 'edit'>('configuration');
   const [isStartingBot, setIsStartingBot] = useState(false);
   const [isStoppingBot, setIsStoppingBot] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
   
   useEffect(() => {
     const fetchBotStatus = async () => {
       try {
         const status = await prReviewBotService.getStatus();
-        setBotStatus(status.status);
+        setBotStatus(status.status === 'running' ? 'running' : 'stopped');
         setBotConnectionStatus(status.connection_status);
+        setStatusError(null);
       } catch (error) {
         console.error('Error fetching bot status:', error);
+        setStatusError(error instanceof Error ? error.message : 'Failed to fetch bot status');
+        setBotStatus('stopped');
+        setBotConnectionStatus('disconnected');
       }
     };
     
@@ -219,14 +224,15 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
     
     try {
       const result = await prReviewBotService.startBot();
-      if (result.status === 'started' || result.status === 'already_running') {
+      if (result.status === 'success') {
         setBotStatus('running');
+        setBotConnectionStatus('connected');
       } else {
         alert(`Failed to start PR Review Bot: ${result.message}`);
       }
     } catch (error) {
       console.error('Error starting PR Review Bot:', error);
-      alert('Failed to start PR Review Bot');
+      alert('Failed to start PR Review Bot: ' + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsStartingBot(false);
     }
@@ -237,7 +243,7 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
     
     try {
       const result = await prReviewBotService.stopBot();
-      if (result.status === 'stopped' || result.status === 'not_running' || result.status === 'killed') {
+      if (result.status === 'success') {
         setBotStatus('stopped');
       }
     } catch (error) {
@@ -269,6 +275,19 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
             </button>
           </div>
           
+          {statusError && (
+            <div className="mb-4 p-3 bg-red-900 text-red-100 rounded-md">
+              <p className="font-medium">Error connecting to PR Review Bot:</p>
+              <p>{statusError}</p>
+              <p className="mt-2 text-sm">
+                Make sure the PR Review Bot is running. You can start it with:
+                <code className="block mt-1 p-2 bg-gray-800 rounded">
+                  cd pr_review_bot && python -m pr_review_bot.main
+                </code>
+              </p>
+            </div>
+          )}
+          
           <div className="border-b border-gray-700 mb-6">
             <nav className="-mb-px flex space-x-6">
               <button
@@ -294,84 +313,137 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
                   resetConfigForm();
                 }}
               >
-                {editingConfigId ? 'Edit Configuration' : 'New Configuration'}
+                Edit
               </button>
             </nav>
           </div>
           
           {activeTab === 'configuration' && (
-            <div className="space-y-4">
-              {prReviewBotConfigs.length === 0 ? (
-                <div className="text-center py-4 text-gray-400">
-                  <p>No PR Review Bot configurations saved yet.</p>
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="text-lg font-medium text-gray-200">PR Review Bot Configurations</h4>
+                
+                <div className="flex space-x-2">
+                  {activePRReviewBotConfigId && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={startBot}
+                        disabled={isStartingBot || botStatus === 'running' || botConnectionStatus === 'connected'}
+                        className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white ${
+                          isStartingBot || botStatus === 'running' || botConnectionStatus === 'connected'
+                            ? 'bg-gray-600 cursor-not-allowed'
+                            : 'bg-green-600 hover:bg-green-700'
+                        }`}
+                      >
+                        {isStartingBot ? 'Starting...' : 'Start Bot'}
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={stopBot}
+                        disabled={isStoppingBot || botStatus === 'stopped'}
+                        className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white ${
+                          isStoppingBot || botStatus === 'stopped'
+                            ? 'bg-gray-600 cursor-not-allowed'
+                            : 'bg-red-600 hover:bg-red-700'
+                        }`}
+                      >
+                        {isStoppingBot ? 'Stopping...' : 'Stop Bot'}
+                      </button>
+                    </>
+                  )}
+                  
                   <button
                     type="button"
-                    onClick={() => setActiveTab('edit')}
-                    className="mt-2 text-indigo-400 hover:text-indigo-300"
+                    onClick={() => {
+                      setActiveTab('edit');
+                      resetConfigForm();
+                    }}
+                    className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+                  >
+                    Add Configuration
+                  </button>
+                </div>
+              </div>
+              
+              {prReviewBotConfigs.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-400">No PR Review Bot configurations yet.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('edit');
+                      resetConfigForm();
+                    }}
+                    className="mt-4 px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
                   >
                     Add your first configuration
                   </button>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {prReviewBotConfigs.map((config) => (
+                  {prReviewBotConfigs.map(config => (
                     <div
                       key={config.id}
-                      className={`p-4 rounded-md border ${
+                      className={`p-4 rounded-lg border ${
                         activePRReviewBotConfigId === config.id
                           ? 'border-indigo-500 bg-gray-800'
-                          : 'border-gray-700 bg-gray-900'
+                          : 'border-gray-700 bg-gray-800/50'
                       }`}
                     >
                       <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="text-lg font-medium text-gray-100">{config.name}</h3>
-                          <p className="text-sm text-gray-400">
-                            {config.isVerified ? (
-                              <span className="text-green-400">✓ Verified</span>
-                            ) : (
-                              <span className="text-yellow-400">⚠ Not verified</span>
-                            )}
-                          </p>
-                          <div className="mt-2 text-sm text-gray-400">
-                            <p>GitHub Token: {config.githubToken.substring(0, 3)}***</p>
-                            <p>AI Provider: {config.anthropic_api_key ? 'Anthropic' : 'OpenAI'}</p>
-                            <p>Auto Merge: {config.auto_review ? 'Enabled' : 'Disabled'}</p>
-                            <p>Monitor All Repos: {config.setup_all_repos_webhooks ? 'Enabled' : 'Disabled'}</p>
+                          <h5 className="text-md font-medium text-gray-200">{config.name}</h5>
+                          <div className="mt-1 text-sm text-gray-400">
+                            <div className="flex items-center space-x-2">
+                              <span>GitHub Token:</span>
+                              <span className="px-2 py-0.5 rounded bg-gray-700 text-gray-300">
+                                {config.githubToken ? config.githubToken.substring(0, 3) + '***' : 'Not set'}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2 mt-1">
+                              <span>AI Provider:</span>
+                              <span className="px-2 py-0.5 rounded bg-gray-700 text-gray-300">
+                                {config.anthropic_api_key ? 'Anthropic' : config.openai_api_key ? 'OpenAI' : 'Not set'}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2 mt-1">
+                              <span>Auto Merge:</span>
+                              <span className={`px-2 py-0.5 rounded ${
+                                config.auto_review
+                                  ? 'bg-green-900 text-green-200'
+                                  : 'bg-gray-700 text-gray-300'
+                              }`}>
+                                {config.auto_review ? 'Enabled' : 'Disabled'}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2 mt-1">
+                              <span>Monitor All Repos:</span>
+                              <span className={`px-2 py-0.5 rounded ${
+                                config.setup_all_repos_webhooks
+                                  ? 'bg-green-900 text-green-200'
+                                  : 'bg-gray-700 text-gray-300'
+                              }`}>
+                                {config.setup_all_repos_webhooks ? 'Enabled' : 'Disabled'}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex flex-col space-y-2">
-                          {activePRReviewBotConfigId === config.id ? (
-                            <div className="flex space-x-2">
-                              {botStatus === 'running' ? (
-                                <button
-                                  type="button"
-                                  onClick={stopBot}
-                                  disabled={isStoppingBot}
-                                  className="px-3 py-1 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-                                >
-                                  {isStoppingBot ? 'Stopping...' : 'Stop Bot'}
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={startBot}
-                                  disabled={isStartingBot}
-                                  className="px-3 py-1 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
-                                >
-                                  {isStartingBot ? 'Starting...' : 'Start Bot'}
-                                </button>
-                              )}
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleSetActiveConfig(config.id)}
-                              className="px-3 py-1 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
-                            >
-                              Set Active
-                            </button>
-                          )}
+                        
+                        <div className="flex space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => handleSetActiveConfig(config.id)}
+                            disabled={activePRReviewBotConfigId === config.id}
+                            className={`px-3 py-1 text-xs font-medium rounded-md ${
+                              activePRReviewBotConfigId === config.id
+                                ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                            }`}
+                          >
+                            {activePRReviewBotConfigId === config.id ? 'Active' : 'Set Active'}
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleEditConfig(config)}

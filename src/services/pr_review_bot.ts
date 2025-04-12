@@ -48,9 +48,18 @@ class PRReviewBotService {
    */
   async getConfig(): Promise<PRReviewBotConfig> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/config`, {
-        headers: this.getHeaders()
-      });
+      // Try both endpoint formats (with hyphen and with underscore)
+      let response;
+      try {
+        response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/config`, {
+          headers: this.getHeaders()
+        });
+      } catch (error) {
+        // If hyphen format fails, try underscore format
+        response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/config`, {
+          headers: this.getHeaders()
+        });
+      }
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -68,11 +77,22 @@ class PRReviewBotService {
    */
   async updateConfig(config: PRReviewBotConfig): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/config`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(config)
-      });
+      // Try both endpoint formats (with hyphen and with underscore)
+      let response;
+      try {
+        response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/config`, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify(config)
+        });
+      } catch (error) {
+        // If hyphen format fails, try underscore format
+        response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/config`, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify(config)
+        });
+      }
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -90,10 +110,20 @@ class PRReviewBotService {
    */
   async reviewPR(repo: string, prNumber: number): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/review/${repo}/${prNumber}`, {
-        method: 'POST',
-        headers: this.getHeaders()
-      });
+      // Try both endpoint formats (with hyphen and with underscore)
+      let response;
+      try {
+        response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/review/${repo}/${prNumber}`, {
+          method: 'POST',
+          headers: this.getHeaders()
+        });
+      } catch (error) {
+        // If hyphen format fails, try underscore format
+        response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/review/${repo}/${prNumber}`, {
+          method: 'POST',
+          headers: this.getHeaders()
+        });
+      }
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -111,11 +141,22 @@ class PRReviewBotService {
    */
   async setupWebhooks(repos?: string[]): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/setup-webhooks`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({ repos })
-      });
+      // Try both endpoint formats (with hyphen and with underscore)
+      let response;
+      try {
+        response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/setup-webhooks`, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify({ repos })
+        });
+      } catch (error) {
+        // If hyphen format fails, try underscore format
+        response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/setup-webhooks`, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify({ repos })
+        });
+      }
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -138,15 +179,31 @@ class PRReviewBotService {
     pr_status: PRStatus[];
   }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/status`, {
-        headers: this.getHeaders()
-      });
+      // Try both endpoint formats (with hyphen and with underscore)
+      let response;
+      try {
+        response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/status`, {
+          headers: this.getHeaders()
+        });
+      } catch (error) {
+        // If hyphen format fails, try underscore format
+        response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/status`, {
+          headers: this.getHeaders()
+        });
+      }
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
       
-      return await response.json();
+      const data = await response.json();
+      
+      // Fix the status display - if connection_status is "connected", set status to "running"
+      if (data.connection_status === "connected") {
+        data.status = "running";
+      }
+      
+      return data;
     } catch (error) {
       console.error('Error fetching PR Review Bot status:', error);
       throw error;
@@ -158,10 +215,20 @@ class PRReviewBotService {
    */
   async startBot(): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/start`, {
-        method: 'POST',
-        headers: this.getHeaders()
-      });
+      // Try both endpoint formats (with hyphen and with underscore)
+      let response;
+      try {
+        response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/start`, {
+          method: 'POST',
+          headers: this.getHeaders()
+        });
+      } catch (error) {
+        // If hyphen format fails, try underscore format
+        response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/start`, {
+          method: 'POST',
+          headers: this.getHeaders()
+        });
+      }
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -179,10 +246,20 @@ class PRReviewBotService {
    */
   async stopBot(): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/stop`, {
-        method: 'POST',
-        headers: this.getHeaders()
-      });
+      // Try both endpoint formats (with hyphen and with underscore)
+      let response;
+      try {
+        response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/stop`, {
+          method: 'POST',
+          headers: this.getHeaders()
+        });
+      } catch (error) {
+        // If hyphen format fails, try underscore format
+        response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/stop`, {
+          method: 'POST',
+          headers: this.getHeaders()
+        });
+      }
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
