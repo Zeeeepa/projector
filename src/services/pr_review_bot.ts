@@ -1,31 +1,25 @@
-import { PRReviewBotConfig } from '../types';
+import { PRReviewBotConfig, PRStatus } from '../types';
 
 /**
  * PR Review Bot Service for interacting with the PR Review Bot API
  */
 class PRReviewBotService {
   private apiBaseUrl: string;
-  private activeConfig: PRReviewBotConfig | null = null;
+  private githubToken: string | null;
   
   /**
-   * Initialize PR Review Bot service with API base URL
+   * Initialize PR Review Bot service
    */
-  constructor(apiBaseUrl: string = 'http://localhost:8000') {
+  constructor(apiBaseUrl: string = 'http://localhost:8000', githubToken: string | null = null) {
     this.apiBaseUrl = apiBaseUrl;
+    this.githubToken = githubToken;
   }
   
   /**
-   * Set active PR Review Bot configuration
+   * Update GitHub token
    */
-  setActiveConfig(config: PRReviewBotConfig): void {
-    this.activeConfig = config;
-  }
-  
-  /**
-   * Clear active PR Review Bot configuration
-   */
-  clearActiveConfig(): void {
-    this.activeConfig = null;
+  updateGitHubToken(token: string | null): void {
+    this.githubToken = token;
   }
   
   /**
@@ -36,11 +30,25 @@ class PRReviewBotService {
   }
   
   /**
+   * Set active PR Review Bot configuration
+   */
+  setActiveConfig(config: PRReviewBotConfig): void {
+    this.githubToken = config.github_token;
+  }
+  
+  /**
+   * Clear active PR Review Bot configuration
+   */
+  clearActiveConfig(): void {
+    this.githubToken = null;
+  }
+  
+  /**
    * Get PR Review Bot configuration
    */
   async getConfig(): Promise<PRReviewBotConfig> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/config`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/config`, {
         headers: this.getHeaders()
       });
       
@@ -58,9 +66,9 @@ class PRReviewBotService {
   /**
    * Update PR Review Bot configuration
    */
-  async updateConfig(config: Partial<PRReviewBotConfig>): Promise<{ status: string; message: string }> {
+  async updateConfig(config: PRReviewBotConfig): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/config`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/config`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(config)
@@ -78,11 +86,11 @@ class PRReviewBotService {
   }
   
   /**
-   * Trigger a PR review
+   * Trigger a PR review manually
    */
-  async reviewPR(repo: string, prNumber: number): Promise<{ status: string; message: string; review_url?: string }> {
+  async reviewPR(repo: string, prNumber: number): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/review/${repo}/${prNumber}`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/review/${repo}/${prNumber}`, {
         method: 'POST',
         headers: this.getHeaders()
       });
@@ -93,7 +101,7 @@ class PRReviewBotService {
       
       return await response.json();
     } catch (error) {
-      console.error('Error triggering PR review:', error);
+      console.error(`Error reviewing PR ${prNumber} in ${repo}:`, error);
       throw error;
     }
   }
@@ -101,9 +109,9 @@ class PRReviewBotService {
   /**
    * Set up webhooks for repositories
    */
-  async setupWebhooks(repos?: string[]): Promise<{ status: string; message: string; details?: any }> {
+  async setupWebhooks(repos?: string[]): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/setup-webhooks`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/setup-webhooks`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({ repos })
@@ -123,20 +131,14 @@ class PRReviewBotService {
   /**
    * Get PR Review Bot status
    */
-  async getStatus(): Promise<{ 
-    status: string; 
+  async getStatus(): Promise<{
+    status: string;
     connection_status: string;
     config: PRReviewBotConfig;
-    pr_status: Array<{
-      repo: string;
-      number: number;
-      title: string;
-      status: string;
-      url: string;
-    }>;
+    pr_status: PRStatus[];
   }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/status`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/status`, {
         headers: this.getHeaders()
       });
       
@@ -146,7 +148,7 @@ class PRReviewBotService {
       
       return await response.json();
     } catch (error) {
-      console.error('Error getting PR Review Bot status:', error);
+      console.error('Error fetching PR Review Bot status:', error);
       throw error;
     }
   }
@@ -156,7 +158,7 @@ class PRReviewBotService {
    */
   async startBot(): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/start`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/start`, {
         method: 'POST',
         headers: this.getHeaders()
       });
@@ -177,7 +179,7 @@ class PRReviewBotService {
    */
   async stopBot(): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/pr-review-bot/stop`, {
+      const response = await fetch(`${this.apiBaseUrl}/api/pr_review_bot/stop`, {
         method: 'POST',
         headers: this.getHeaders()
       });
@@ -201,8 +203,8 @@ class PRReviewBotService {
       'Content-Type': 'application/json'
     };
     
-    if (this.activeConfig?.githubToken) {
-      headers['X-GitHub-Token'] = this.activeConfig.githubToken;
+    if (this.githubToken) {
+      headers['X-GitHub-Token'] = this.githubToken;
     }
     
     return headers;

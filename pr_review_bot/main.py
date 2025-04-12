@@ -124,18 +124,14 @@ class PRReviewBot:
         """
         try:
             response = requests.post(
-                f"{self.config['projector_api_url']}/api/pr-review-bot/notify-connected",
+                f"{self.config['projector_api_url']}/api/pr_review_bot/notify-connected",
                 json={"status": "connected"},
                 headers={"Content-Type": "application/json"}
             )
-            
-            if response.status_code == 200:
-                logger.info("Successfully notified Projector of connection")
-                self.projector_connected = True
-            else:
-                logger.warning("Failed to notify Projector of connection: %s", response.text)
+            response.raise_for_status()
+            logger.info("Notified Projector of connection")
         except Exception as e:
-            logger.error("Error notifying Projector of connection: %s", str(e))
+            logger.error(f"Failed to notify Projector of connection: {e}")
     
     def start(self) -> None:
         """
@@ -178,13 +174,15 @@ class PRReviewBot:
         
         # Notify Projector of disconnection
         try:
-            requests.post(
-                f"{self.config['projector_api_url']}/api/pr-review-bot/notify-disconnected",
+            response = requests.post(
+                f"{self.config['projector_api_url']}/api/pr_review_bot/notify-disconnected",
                 json={"status": "disconnected"},
                 headers={"Content-Type": "application/json"}
             )
+            response.raise_for_status()
+            logger.info("Notified Projector of disconnection")
         except Exception as e:
-            logger.error("Error notifying Projector of disconnection: %s", str(e))
+            logger.error(f"Failed to notify Projector of disconnection: {e}")
         
         # Wait for monitor thread to finish
         if hasattr(self, 'monitor_thread') and self.monitor_thread.is_alive():
@@ -238,12 +236,25 @@ class PRReviewBot:
                 }
                 
                 requests.post(
-                    f"{self.config['projector_api_url']}/api/pr-review-bot/update-status",
+                    f"{self.config['projector_api_url']}/api/pr_review_bot/update-status",
                     json=pr_status_data,
                     headers={"Content-Type": "application/json"}
                 )
         except Exception as e:
             logger.error("Error updating PR status in Projector: %s", str(e))
+    
+    def update_pr_status(self, prs):
+        """Update PR status in Projector."""
+        try:
+            response = requests.post(
+                f"{self.config['projector_api_url']}/api/pr_review_bot/update-status",
+                json={"prs": prs},
+                headers={"Content-Type": "application/json"}
+            )
+            response.raise_for_status()
+            logger.info(f"Updated PR status in Projector: {len(prs)} PRs")
+        except Exception as e:
+            logger.error(f"Failed to update PR status in Projector: {e}")
 
 def parse_args() -> argparse.Namespace:
     """

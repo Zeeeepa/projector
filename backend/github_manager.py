@@ -26,6 +26,15 @@ class GitHubManager:
             self.github = None
         else:
             self.github = Github(self.access_token)
+            # Validate token by making a simple API call
+            try:
+                # Try to get the authenticated user to validate the token
+                user = self.github.get_user()
+                user.login  # This will trigger an API call
+                logger.info(f"GitHub token validated for user: {user.login}")
+            except GithubException as e:
+                logger.error(f"Invalid GitHub token: {e}")
+                self.github = None
     
     def get_repository(self, owner: str, repo: str) -> Optional[Repository.Repository]:
         """
