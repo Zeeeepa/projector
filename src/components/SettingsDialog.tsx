@@ -646,20 +646,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                 
                 {activeTab === 'github' && (
                   <div className="mt-4">
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-gray-300">Backend API URL</h4>
-                      <input
-                        type="url"
-                        value={apiBaseUrl}
-                        onChange={(e) => setApiBaseUrl(e.target.value)}
-                        className="mt-1 block w-full rounded-md bg-gray-800 border-gray-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="http://localhost:8000"
-                      />
-                      <p className="mt-1 text-xs text-gray-400">
-                        Base URL for the backend API (default: http://localhost:8000)
-                      </p>
-                    </div>
-                    
                     <label htmlFor="githubToken" className="block text-sm font-medium text-gray-300">
                       GitHub Token
                     </label>
