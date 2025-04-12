@@ -97,6 +97,7 @@ export function PRReviewBotTab({ apiBaseUrl }: PRReviewBotTabProps) {
       return;
     }
     
+    // Create a simplified config with only the required fields
     const configData: Omit<PRReviewBotConfig, 'id'> = {
       name: configName,
       githubToken,
