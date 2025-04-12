@@ -27,6 +27,7 @@ class PRReviewBotConfig(BaseModel):
     openai_api_key: Optional[str] = None
     slack_bot_token: Optional[str] = None
     slack_channel: Optional[str] = None
+    instructions: Optional[str] = None
 
 class PRReviewResponse(BaseModel):
     """PR Review response model."""

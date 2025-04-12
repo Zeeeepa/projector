@@ -32,7 +32,8 @@ class PRReviewBotManager:
             "anthropic_api_key": "",
             "openai_api_key": "",
             "slack_bot_token": "",
-            "slack_channel": ""
+            "slack_channel": "",
+            "instructions": ""
         }
         
         # Load or create configuration
@@ -150,15 +151,32 @@ class PRReviewBotManager:
             # Start PR Review Bot process
             cmd = [
                 "python", "-m", "pr_review_bot.main",
-                "--github-token", self.config.get("github_token", ""),
                 "--env-file", env_file
             ]
+            
+            # Add GitHub token directly to command line
+            if self.config.get("github_token"):
+                cmd.extend(["--github-token", self.config.get("github_token")])
             
             # Set AI provider and key
             if self.config.get("anthropic_api_key"):
                 cmd.extend(["--ai-provider", "anthropic", "--ai-key", self.config.get("anthropic_api_key")])
             elif self.config.get("openai_api_key"):
                 cmd.extend(["--ai-provider", "openai", "--ai-key", self.config.get("openai_api_key")])
+            
+            # Add auto-review flag if enabled
+            if self.config.get("auto_review"):
+                cmd.append("--auto-review")
+            
+            # Add instructions if provided
+            if self.config.get("instructions"):
+                cmd.extend(["--instructions", self.config.get("instructions")])
+            
+            # Add monitor-all-repos flag if enabled
+            if self.config.get("setup_all_repos_webhooks"):
+                cmd.append("--monitor-all-repos")
+            
+            logger.info(f"Starting PR Review Bot with command: {' '.join(cmd)}")
             
             self.pr_review_bot_process = subprocess.Popen(
                 cmd,
@@ -237,18 +255,25 @@ class PRReviewBotManager:
             # Run PR review command
             cmd = [
                 "python", "-m", "pr_review_bot.main",
-                "--github-token", github_token,
                 "--env-file", env_file,
                 "review",
                 "--repo", repo,
                 "--pr", str(pr_number)
             ]
             
+            # Add GitHub token directly to command line
+            if github_token:
+                cmd.extend(["--github-token", github_token])
+            
             # Set AI provider and key
             if self.config.get("anthropic_api_key"):
                 cmd.extend(["--ai-provider", "anthropic", "--ai-key", self.config.get("anthropic_api_key")])
             elif self.config.get("openai_api_key"):
                 cmd.extend(["--ai-provider", "openai", "--ai-key", self.config.get("openai_api_key")])
+            
+            # Add instructions if provided
+            if self.config.get("instructions"):
+                cmd.extend(["--instructions", self.config.get("instructions")])
             
             result = subprocess.run(
                 cmd,
@@ -300,10 +325,13 @@ class PRReviewBotManager:
             # Run webhook setup command
             cmd = [
                 "python", "-m", "pr_review_bot.main",
-                "--github-token", self.config.get("github_token", ""),
                 "--env-file", env_file,
                 "setup-webhooks"
             ]
+            
+            # Add GitHub token directly to command line
+            if self.config.get("github_token"):
+                cmd.extend(["--github-token", self.config.get("github_token")])
             
             if repos:
                 for repo in repos:
@@ -348,23 +376,35 @@ class PRReviewBotManager:
         fd, env_file = tempfile.mkstemp(suffix=".env")
         
         with os.fdopen(fd, "w") as f:
-            f.write(f"GITHUB_TOKEN={github_token or self.config.get('github_token', '')}\\n")
-            f.write(f"GITHUB_WEBHOOK_SECRET={self.config.get('webhook_secret', '')}\\n")
+            # Use the provided token or the one from config
+            token = github_token or self.config.get('github_token', '')
+            f.write(f"GITHUB_TOKEN={token}\n")
+            f.write(f"GITHUB_WEBHOOK_SECRET={self.config.get('webhook_secret', '')}\n")
             
             if self.config.get("anthropic_api_key"):
-                f.write(f"ANTHROPIC_API_KEY={self.config.get('anthropic_api_key')}\\n")
+                f.write(f"ANTHROPIC_API_KEY={self.config.get('anthropic_api_key')}\n")
             
             if self.config.get("openai_api_key"):
-                f.write(f"OPENAI_API_KEY={self.config.get('openai_api_key')}\\n")
+                f.write(f"OPENAI_API_KEY={self.config.get('openai_api_key')}\n")
             
             if self.config.get("slack_bot_token"):
-                f.write(f"SLACK_BOT_TOKEN={self.config.get('slack_bot_token')}\\n")
+                f.write(f"SLACK_BOT_TOKEN={self.config.get('slack_bot_token')}\n")
             
             if self.config.get("slack_channel"):
-                f.write(f"SLACK_CHANNEL={self.config.get('slack_channel')}\\n")
+                f.write(f"SLACK_CHANNEL={self.config.get('slack_channel')}\n")
             
-            f.write("HOST=0.0.0.0\\n")
-            f.write("PORT=8001\\n")
-            f.write("LOG_LEVEL=INFO\\n")
+            # Add auto-review setting
+            f.write(f"AUTO_REVIEW={'true' if self.config.get('auto_review') else 'false'}\n")
+            
+            # Add monitor-all-repos setting
+            f.write(f"MONITOR_ALL_REPOS={'true' if self.config.get('setup_all_repos_webhooks') else 'false'}\n")
+            
+            # Add instructions if provided
+            if self.config.get("instructions"):
+                f.write(f"INSTRUCTIONS={self.config.get('instructions')}\n")
+            
+            f.write("HOST=0.0.0.0\n")
+            f.write("PORT=8001\n")
+            f.write("LOG_LEVEL=INFO\n")
         
         return env_file
