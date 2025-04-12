@@ -35,7 +35,11 @@ class PRReviewBotManager:
             "slack_channel": "",
             "instructions": "",
             "poll_interval": 30,  # seconds
-            "monitor_all_repos": False
+            "monitor_all_repos": False,
+            "ngrok_enabled": False,
+            "ngrok_auth_token": "",
+            "webhook_port": 8001,
+            "webhook_host": "0.0.0.0"
         }
         
         # Load or create configuration
@@ -171,8 +175,30 @@ class PRReviewBotManager:
                 cmd.extend(["--poll-interval", str(self.config.get("poll_interval"))])
             
             # Add monitor-all-repos flag if enabled
-            if self.config.get("setup_all_repos_webhooks"):
+            if self.config.get("monitor_all_repos"):
                 cmd.append("--monitor-all-repos")
+            
+            # Add ngrok flag if enabled
+            if self.config.get("ngrok_enabled"):
+                cmd.append("--ngrok")
+                
+                # Add ngrok auth token if provided
+                if self.config.get("ngrok_auth_token"):
+                    cmd.extend(["--ngrok-auth-token", self.config.get("ngrok_auth_token")])
+            
+            # Add webhook settings
+            if self.config.get("webhook_port"):
+                cmd.extend(["--webhook-port", str(self.config.get("webhook_port"))])
+            
+            if self.config.get("webhook_host"):
+                cmd.extend(["--webhook-host", self.config.get("webhook_host")])
+            
+            if self.config.get("webhook_secret"):
+                cmd.extend(["--webhook-secret", self.config.get("webhook_secret")])
+            
+            # Add setup-webhooks flag if enabled
+            if self.config.get("setup_all_repos_webhooks"):
+                cmd.append("--setup-webhooks")
             
             logger.info(f"Starting PR Review Bot with command: {' '.join(cmd)}")
             
@@ -331,6 +357,24 @@ class PRReviewBotManager:
             if self.config.get("github_token"):
                 cmd.extend(["--github-token", self.config.get("github_token")])
             
+            # Add ngrok flag if enabled
+            if self.config.get("ngrok_enabled"):
+                cmd.append("--ngrok")
+                
+                # Add ngrok auth token if provided
+                if self.config.get("ngrok_auth_token"):
+                    cmd.extend(["--ngrok-auth-token", self.config.get("ngrok_auth_token")])
+            
+            # Add webhook settings
+            if self.config.get("webhook_port"):
+                cmd.extend(["--webhook-port", str(self.config.get("webhook_port"))])
+            
+            if self.config.get("webhook_host"):
+                cmd.extend(["--webhook-host", self.config.get("webhook_host")])
+            
+            if self.config.get("webhook_secret"):
+                cmd.extend(["--webhook-secret", self.config.get("webhook_secret")])
+            
             if repos:
                 for repo in repos:
                     cmd.extend(["--repo", repo])
@@ -395,17 +439,27 @@ class PRReviewBotManager:
             f.write(f"AUTO_REVIEW={'true' if self.config.get('auto_review') else 'false'}\n")
             
             # Add monitor-all-repos setting
-            f.write(f"MONITOR_ALL_REPOS={'true' if self.config.get('setup_all_repos_webhooks') else 'false'}\n")
+            f.write(f"MONITOR_ALL_REPOS={'true' if self.config.get('monitor_all_repos') else 'false'}\n")
             
             # Add poll interval setting
             f.write(f"POLL_INTERVAL={self.config.get('poll_interval', 30)}\n")
+            
+            # Add ngrok settings
+            if self.config.get("ngrok_enabled"):
+                f.write(f"NGROK_ENABLED=true\n")
+                if self.config.get("ngrok_auth_token"):
+                    f.write(f"NGROK_AUTH_TOKEN={self.config.get('ngrok_auth_token')}\n")
+            
+            # Add webhook settings
+            f.write(f"WEBHOOK_PORT={self.config.get('webhook_port', 8001)}\n")
+            f.write(f"WEBHOOK_HOST={self.config.get('webhook_host', '0.0.0.0')}\n")
             
             # Add instructions if provided
             if self.config.get("instructions"):
                 f.write(f"INSTRUCTIONS={self.config.get('instructions')}\n")
             
-            f.write("HOST=0.0.0.0\n")
-            f.write("PORT=8001\n")
+            f.write(f"HOST={self.config.get('webhook_host', '0.0.0.0')}\n")
+            f.write(f"PORT={self.config.get('webhook_port', 8001)}\n")
             f.write("LOG_LEVEL=INFO\n")
         
         return env_file
