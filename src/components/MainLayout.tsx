@@ -6,7 +6,6 @@ import { ProjectDialog } from './ProjectDialog';
 import { SettingsDialog } from './SettingsDialog';
 import RequirementsManager from './RequirementsManager';
 import { useProjectStore } from '../store';
-import PRBranchDialog from './PRBranchDialog';
 import { prReviewBotService } from '../services/pr_review_bot';
 import PRReviewBotSettingsPanel from './PRReviewBotSettingsPanel';
 
@@ -14,7 +13,6 @@ const MainLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
-  const [isPRBranchDialogOpen, setIsPRBranchDialogOpen] = useState(false);
   const [isPRReviewSettingsPanelOpen, setIsPRReviewSettingsPanelOpen] = useState(false);
   const [activeView, setActiveView] = useState<'requirements' | 'context'>('context');
   const { projects, setActiveProject, updateProject, activeProject } = useProjectStore();
@@ -164,12 +162,6 @@ const MainLayout: React.FC = () => {
             ) : (
               <div className="text-gray-400 text-center p-4">
                 <p>No PRs or branches yet</p>
-                <button 
-                  className="mt-2 px-3 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition text-sm"
-                  onClick={() => setIsPRBranchDialogOpen(true)}
-                >
-                  Create New
-                </button>
               </div>
             )}
           </div>
@@ -307,13 +299,6 @@ const MainLayout: React.FC = () => {
         isOpen={isSettingsDialogOpen}
         onClose={() => setIsSettingsDialogOpen(false)}
       />
-
-      {isPRBranchDialogOpen && (
-        <PRBranchDialog
-          isOpen={isPRBranchDialogOpen}
-          onClose={() => setIsPRBranchDialogOpen(false)}
-        />
-      )}
 
       {isPRReviewSettingsPanelOpen && (
         <PRReviewBotSettingsPanel
