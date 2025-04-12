@@ -54,6 +54,7 @@ export interface PRReviewBotConfig {
   slack_bot_token?: string;
   slack_channel?: string;
   isVerified?: boolean;
+  instructions?: string;
 }
 
 export interface ProjectStore {
