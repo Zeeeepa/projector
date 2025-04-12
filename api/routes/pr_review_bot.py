@@ -11,7 +11,8 @@ from pydantic import BaseModel
 from backend.pr_review_bot_manager import PRReviewBotManager
 
 # Initialize the router with a prefix
-router = APIRouter(prefix="/pr-review-bot", tags=["pr_review_bot"])
+# Changed from "pr-review-bot" to "pr_review_bot" to match client-side expectations
+router = APIRouter(prefix="/pr_review_bot", tags=["pr_review_bot"])
 logger = logging.getLogger(__name__)
 
 # Models
