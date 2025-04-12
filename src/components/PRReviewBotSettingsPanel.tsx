@@ -32,7 +32,7 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'saved_configs' | 'new_config'>('saved_configs');
+  const [activeTab, setActiveTab] = useState<'configuration' | 'edit'>('configuration');
   const [isStartingBot, setIsStartingBot] = useState(false);
   const [isStoppingBot, setIsStoppingBot] = useState(false);
   
@@ -126,7 +126,7 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
     }
     
     resetConfigForm();
-    setActiveTab('saved_configs');
+    setActiveTab('configuration');
   };
   
   const handleDeleteConfig = (id: string) => {
@@ -156,7 +156,7 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
     
     setTestResult(config.isVerified ? { success: true, message: 'Configuration verified' } : null);
     
-    setActiveTab('new_config');
+    setActiveTab('edit');
   };
   
   const handleSetActiveConfig = (id: string) => {
@@ -221,6 +221,8 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
       const result = await prReviewBotService.startBot();
       if (result.status === 'started' || result.status === 'already_running') {
         setBotStatus('running');
+      } else {
+        alert(`Failed to start PR Review Bot: ${result.message}`);
       }
     } catch (error) {
       console.error('Error starting PR Review Bot:', error);
@@ -272,23 +274,23 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
               <button
                 type="button"
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'saved_configs'
+                  activeTab === 'configuration'
                     ? 'border-indigo-500 text-indigo-400'
                     : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
                 }`}
-                onClick={() => setActiveTab('saved_configs')}
+                onClick={() => setActiveTab('configuration')}
               >
-                Saved Configurations
+                Configuration
               </button>
               <button
                 type="button"
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'new_config'
+                  activeTab === 'edit'
                     ? 'border-indigo-500 text-indigo-400'
                     : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
                 }`}
                 onClick={() => {
-                  setActiveTab('new_config');
+                  setActiveTab('edit');
                   resetConfigForm();
                 }}
               >
@@ -297,14 +299,14 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
             </nav>
           </div>
           
-          {activeTab === 'saved_configs' && (
+          {activeTab === 'configuration' && (
             <div className="space-y-4">
               {prReviewBotConfigs.length === 0 ? (
                 <div className="text-center py-4 text-gray-400">
                   <p>No PR Review Bot configurations saved yet.</p>
                   <button
                     type="button"
-                    onClick={() => setActiveTab('new_config')}
+                    onClick={() => setActiveTab('edit')}
                     className="mt-2 text-indigo-400 hover:text-indigo-300"
                   >
                     Add your first configuration
@@ -419,7 +421,7 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
             </div>
           )}
           
-          {activeTab === 'new_config' && (
+          {activeTab === 'edit' && (
             <div className="space-y-4">
               <div>
                 <label htmlFor="configName" className="block text-sm font-medium text-gray-300">
@@ -573,7 +575,7 @@ const PRReviewBotSettingsPanel: React.FC<PRReviewBotSettingsPanelProps> = ({ isO
                   type="button"
                   onClick={() => {
                     resetConfigForm();
-                    setActiveTab('saved_configs');
+                    setActiveTab('configuration');
                   }}
                   className="w-full px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
                 >
