@@ -1,6 +1,0 @@
-requests>=2.26.0
-PyGithub>=1.55
-anthropic>=0.2.0
-openai>=0.27.0
-python-dotenv>=0.19.0
-pyngrok>=5.1.0
